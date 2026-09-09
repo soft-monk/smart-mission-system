@@ -1,0 +1,36 @@
+# === Node / 前端 ===
+node_modules/
+frontend/dist/
+shell/dist/
+
+# === Java / 后端 ===
+backend/target/
+backend/src/main/resources/static/*
+!backend/src/main/resources/static/.gitkeep
+backend/run/
+*.port
+
+# === 瓦片等二进制地理数据（离线分发走打包/外部存储，不入库） ===
+tiles/**/*.png
+tiles/**/*.jpg
+tiles/**/*.webp
+tiles/**/*.mbtiles
+tiles/**/*.pmtiles
+tiles/**/*.tif
+tiles/**/*.tiff
+tiles/**/*.pbf
+tiles/**/*.geojson
+
+# === 构建与运行输出 ===
+runtime/*
+release/*
+!runtime/.gitkeep
+!release/.gitkeep
+
+# === IDE / 系统 ===
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+*.log
