@@ -1,15 +1,23 @@
 # === Node / 前端 ===
 node_modules/
 frontend/dist/
+backend/static/*
+!backend/static/.gitkeep
 
-# === Java / 后端 ===
-backend/target/
-backend/src/main/resources/static/*
-!backend/src/main/resources/static/.gitkeep
-backend/run/
-*.port
+# === C++ 后端 ===
+backend/build/
+build/
+CMakeCache.txt
+CMakeFiles/
+vcpkg_installed/
 
-# === 瓦片等二进制地理数据（离线分发走打包/外部存储，不入库） ===
+# === Python ===
+ai/.venv/
+.venv/
+__pycache__/
+*.pyc
+
+# === 瓦片等二进制地理数据（不入库，随部署包分发） ===
 tiles/**/*.png
 tiles/**/*.jpg
 tiles/**/*.webp
@@ -19,6 +27,12 @@ tiles/**/*.tif
 tiles/**/*.tiff
 tiles/**/*.pbf
 tiles/**/*.geojson
+
+# === 本地演示视频素材（不入库） ===
+media/*.mp4
+media/*.webm
+media/*.mov
+media/*.mkv
 
 # === 部署与运行输出 ===
 release/*
