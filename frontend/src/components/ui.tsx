@@ -52,8 +52,9 @@ export const Panel: React.FC<{
   className?: string
   style?: React.CSSProperties
   bodyStyle?: React.CSSProperties
-}> = ({ title, icon, extra, children, className, style, bodyStyle }) => (
-  <section className={`panel ${className ?? ''}`} style={style}>
+  hud?: boolean
+}> = ({ title, icon, extra, children, className, style, bodyStyle, hud }) => (
+  <section className={`panel ${hud ? 'hud' : ''} ${className ?? ''}`} style={style}>
     {title && (
       <header className="panel-title">
         {icon && <Icon name={icon} />}
@@ -64,6 +65,74 @@ export const Panel: React.FC<{
     )}
     <div className="panel-body" style={bodyStyle}>{children}</div>
   </section>
+)
+
+/** 指标小格：原型图里成片的密集参数格 */
+export const Stat: React.FC<{
+  k: string
+  v: React.ReactNode
+  u?: string
+  tone?: string
+  toneClass?: string
+  style?: React.CSSProperties
+}> = ({ k, v, u, tone, toneClass, style }) => (
+  <div className="stat" style={style}>
+    <div className="k">{k}</div>
+    <div className={`v ${toneClass ?? ''}`} style={tone ? { color: tone } : undefined}>
+      {v}
+      {u && <span className="u">{u}</span>}
+    </div>
+  </div>
+)
+
+/** 实时数值：值变化时短暂高亮，传达「数据在跳」 */
+export const LiveNum: React.FC<{
+  value: number | string
+  digits?: number
+  suffix?: string
+  toneClass?: string
+  style?: React.CSSProperties
+}> = ({ value, digits = 0, suffix = '', toneClass, style }) => {
+  const num = typeof value === 'number' ? value : Number(value)
+  const shown = Number.isFinite(num) ? num.toFixed(digits) : String(value)
+  const prev = React.useRef(shown)
+  const [flash, setFlash] = React.useState(false)
+  React.useEffect(() => {
+    if (prev.current !== shown) {
+      prev.current = shown
+      setFlash(true)
+      const t = window.setTimeout(() => setFlash(false), 700)
+      return () => window.clearTimeout(t)
+    }
+  }, [shown])
+  return (
+    <span className={`${flash ? 'num-flash' : ''} ${toneClass ?? ''}`} style={style}>
+      {shown}{suffix}
+    </span>
+  )
+}
+
+/** 密集数据行（带序号徽标，可选选中态） */
+export const DataRow: React.FC<{
+  index?: React.ReactNode
+  children: React.ReactNode
+  onClick?: () => void
+  active?: boolean
+  style?: React.CSSProperties
+}> = ({ index, children, onClick, active, style }) => (
+  <div
+    onClick={onClick}
+    style={{
+      cursor: onClick ? 'pointer' : undefined,
+      margin: '0 -6px', padding: '5px 6px', borderRadius: 4,
+      background: active ? 'rgba(34,211,238,.10)' : undefined,
+      borderLeft: active ? '2px solid var(--cyan)' : '2px solid transparent',
+      ...style,
+    }}
+  >
+    {index !== undefined && <span className="idx">{index}</span>}
+    {children}
+  </div>
 )
 
 export const KV: React.FC<{ k: string; v: React.ReactNode; vClass?: string }> = ({ k, v, vClass }) => (

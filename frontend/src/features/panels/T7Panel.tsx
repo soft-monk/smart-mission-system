@@ -156,7 +156,9 @@ export const T7Panel: React.FC = () => {
   const generateReport = useStore((s) => s.generateReport)
   const setPhase = useStore((s) => s.setPhase)
   const pushTimeline = useStore((s) => s.pushTimeline)
-  const [mode, setMode] = useState<'T7-1' | 'T7-2'>('T7-1')
+  // 默认停在动作页签 T7-2（任务总结，含【导出任务报告】等推进按钮），
+  // 避免进入阶段只看到 T7-1 评估地图而找不到可执行动作。
+  const [mode, setMode] = useState<'T7-1' | 'T7-2'>('T7-2')
   const [busy, setBusy] = useState(false)
 
   const s1 = scenarioKey === 'scenario-1'

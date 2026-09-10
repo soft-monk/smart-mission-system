@@ -285,8 +285,9 @@ void mapConfig(const Req&, Cb cb) {
     data["maxZoom"] = cfg.mapMaxZoom;
 
     nlohmann::json basemap;
-    basemap["tileUrlTemplate"] = "/tiles/{z}/{x}/{y}.png";
-    basemap["attribution"] = "© OpenStreetMap contributors";
+    // 本地缓存的 Esri World Imagery 卫星影像瓦片（tiles/raster/{z}/{x}/{y}.jpg）
+    basemap["tileUrlTemplate"] = "/tiles/raster/{z}/{x}/{y}.jpg";
+    basemap["attribution"] = "Esri, Maxar, Earthstar Geographics, and the GIS User Community";
     basemap["fallback"] = "solid";   // 无瓦片时前端用纯色底图（保证可演示）
     data["basemap"] = basemap;
 
@@ -331,6 +332,7 @@ void recommendScenario(const Req& req, Cb cb) {
 }
 
 void createMission(const Req& req, Cb cb) {
+    try {
     const auto j = bodyJson(req);
     const std::string key = sval(j, "scenarioKey", "scenario-1");
     auto sc = Repo::one(db(), "SELECT * FROM scenario WHERE key=?", {key});
@@ -339,9 +341,21 @@ void createMission(const Req& req, Cb cb) {
     const std::string id = Repo::newId("m");
     const std::string taskNo = "M" + Repo::nowString().substr(0, 10)
                              + "-" + std::to_string(Repo::nowMs() % 100);
-    nlohmann::json p{id, key, taskNo, sc.value("name", "") + "（演示）",
-                     sc.value("task_type", ""), sc.value("task_region", ""),
-                     "上级指派", "T0", "running", 0, Repo::nowString()};
+    // 注意：nlohmann::json 从初始化列表构造时，元素类型必须一致；
+    // 混入 int 字面量（如 0）会让整表退化为数组或抛 type_error，故全部显式转字符串。
+    nlohmann::json p = nlohmann::json::array();
+    p.push_back(id);
+    p.push_back(key);
+    p.push_back(taskNo);
+    p.push_back(sc.value("name", std::string()) + "（演示）");
+    p.push_back(sc.value("task_type", std::string()));
+    p.push_back(sc.value("task_region", std::string()));
+    p.push_back(std::string("上级指派"));
+    p.push_back(std::string("T0"));
+    p.push_back(std::string("running"));
+    p.push_back(std::string("0"));
+    p.push_back(Repo::nowString());
+    p.push_back(Repo::nowString());
     if (!Repo::exec(db(),
             "INSERT INTO mission(id,scenario_key,task_no,task_name,task_type,task_region,source,phase,status,progress,received_at,started_at) "
             "VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", p)) {
@@ -359,53 +373,76 @@ void createMission(const Req& req, Cb cb) {
     copyRows("mission_metrics", "coverage_rate,targets_found,coop_efficiency,link_stability,mesh_duration_sec,alert_count,resource_used,survival_rate");
     copyRows("assessment", "total_damage_rate,destroyed,severe,damaged,intact,area_control,effect_metrics");
 
-    // plan / grp / target / link 需要重写主键，逐行复制
+    // plan / grp / target / link 需要重写主键，逐行复制。
+    // idSuffix：从原行取哪个字段做后缀，保证新 id 唯一（link 表没有 seq，必须用 id 后缀）。
     auto cloneWithNewId = [&](const std::string& table, const std::string& idPrefix,
+                              const std::string& idSuffix,
                               const std::vector<std::string>& cols) {
         auto rows = Repo::query(db(), "SELECT * FROM " + table + " WHERE mission_id=?", {src});
         for (const auto& r : rows) {
-            const std::string newId = id + "-" + idPrefix + "-" + std::to_string(r.value("seq", 0));
+            std::string suffix;
+            if (idSuffix == "id") {
+                // 用原 id 的末段（如 m-s1-link-3 → link-3）
+                const std::string oldId = r.value("id", std::string());
+                suffix = oldId.empty() ? Repo::newId("x") : oldId;
+                if (suffix.rfind(src + "-", 0) == 0) suffix = suffix.substr(src.size() + 1);
+            } else if (idSuffix == "side_seq") {
+                // plan 表：编组侧与打击侧的 seq 都是 1/2/3，必须带 side 才能保证 id 唯一
+                suffix = r.value("side", std::string("x")) + "-" + std::to_string(r.value("seq", 0));
+            } else {
+                // 注意：r.value(key, 0) 会按默认值推导为 int，遇字符串字段会抛 type_error；
+                // 这里显式判类型，字符串/数字都能取。
+                const auto& v = r.contains(idSuffix) ? r[idSuffix] : nlohmann::json(nullptr);
+                if (v.is_number_integer()) suffix = std::to_string(v.get<long long>());
+                else if (v.is_number()) suffix = v.dump();
+                else if (v.is_string()) suffix = v.get<std::string>();
+                else suffix = Repo::newId("x");
+            }
+            const std::string newId = id + "-" + idPrefix + "-" + suffix;
             std::vector<std::string> params{newId, id};
             std::string collist = "id,mission_id";
+            std::string ph = "?,?";
             for (const auto& c : cols) {
                 collist += "," + c;
+                ph += ",?";
                 const auto& v = r.contains(c) ? r[c] : nlohmann::json(nullptr);
-                if (v.is_null()) params.push_back("");
+                if (v.is_null()) params.push_back(std::string());
                 else if (v.is_string()) params.push_back(v.get<std::string>());
                 else params.push_back(v.dump());
             }
-            std::string ph = "?";
-            for (size_t i = 0; i < cols.size(); ++i) ph += ",?";
-            Repo::exec(db(), "INSERT INTO " + table + "(" + collist + ") VALUES(" + ph + ")", params);
+            if (!Repo::exec(db(), "INSERT INTO " + table + "(" + collist + ") VALUES(" + ph + ")", params)) {
+                std::cerr << "[mission] clone row failed: table=" << table << " id=" << newId << std::endl;
+            }
         }
     };
-    cloneWithNewId("plan", "plan",
+    cloneWithNewId("plan", "plan", "side_seq",
         {"side","seq","name","subtitle","method","groups","success_rate","effect","stars",
          "recommended","reason","advantage","note","adopted","confirmed"});
-    cloneWithNewId("grp", "grp",
+    cloneWithNewId("grp", "grp", "seq",
         {"plan_id","seq","name","optical","radar","electronic","comm","task_dir","cover_area",
          "task_attr","coop_rel","readiness","lng","lat"});
-    cloneWithNewId("target", "t",
+    cloneWithNewId("target", "t", "target_no",
         {"target_no","name","type","threat","confidence","lng","lat","alt","source",
          "dynamic_state","status","strike_priority","value_tag","upgraded"});
-    cloneWithNewId("link", "link",
+    cloneWithNewId("link", "link", "id",
         {"from_node","to_node","signal","bandwidth_mbps","latency_ms","loss_rate",
          "coverage_km2","mesh_progress","state"});
 
-    // 修正 grp.plan_id 指向新任务的方案
+    // 修正 grp.plan_id 指向新任务的方案（原值形如 m-s1-plan-g2）
     Repo::exec(db(), "UPDATE grp SET plan_id=REPLACE(plan_id, ?, ?) WHERE mission_id=?", {src, id, id});
-    // 修正 target id 引用轨迹
+    // 修正 target_track 的 target_id 引用
     auto newTargets = Repo::query(db(), "SELECT id, target_no FROM target WHERE mission_id=?", {id});
     for (const auto& t : newTargets) {
         auto tracks = Repo::query(db(), "SELECT ts,lng,lat,speed,heading FROM target_track WHERE target_id=?",
                                   {src + "-t" + std::to_string(t.value("target_no", 0))});
         for (const auto& tr : tracks) {
+            const long long ts = tr.contains("ts") && tr["ts"].is_number() ? tr["ts"].get<long long>() : 0LL;
+            auto num = [&](const char* key) {
+                return tr.contains(key) && tr[key].is_number() ? tr[key].dump() : std::string("0");
+            };
             Repo::exec(db(), "INSERT INTO target_track(target_id,ts,lng,lat,speed,heading) VALUES(?,?,?,?,?,?)",
-                       {t.value("id", ""), tr.value("ts", 0LL) ? std::to_string(tr["ts"].get<long long>()) : "0",
-                        tr.value("lng", 0.0) ? tr["lng"].dump() : "0",
-                        tr.value("lat", 0.0) ? tr["lat"].dump() : "0",
-                        tr.value("speed", 0.0) ? tr["speed"].dump() : "0",
-                        tr.value("heading", 0.0) ? tr["heading"].dump() : "0"});
+                       {t.value("id", ""), std::to_string(ts),
+                        num("lng"), num("lat"), num("speed"), num("heading")});
         }
     }
 
@@ -413,6 +450,14 @@ void createMission(const Req& req, Cb cb) {
                                                      {"scenarioKey", key}, {"progress", 0}});
     EventHub::logEvent(id, "mission.created", {{"scenarioKey", key}});
     cb(ok(loadMission(id)));
+    } catch (const std::exception& ex) {
+        std::cerr << "[mission] createMission exception: " << ex.what() << std::endl;
+        cb(fail(1005, std::string("create mission failed: ") + ex.what(),
+                drogon::k500InternalServerError));
+    } catch (...) {
+        std::cerr << "[mission] createMission unknown exception" << std::endl;
+        cb(fail(1005, "create mission failed", drogon::k500InternalServerError));
+    }
 }
 
 void currentMission(const Req&, Cb cb) {
@@ -578,17 +623,25 @@ void optimizePlan(const Req&, Cb cb, const std::string& id) {
 void confirmPlan(const Req&, Cb cb, const std::string& id) {
     auto p = Repo::one(db(), "SELECT * FROM plan WHERE id=?", {id});
     if (p.empty()) { cb(fail(1004, "plan not found", drogon::k404NotFound)); return; }
-    if (p.value("confirmed", 0) == 1) { cb(fail(1002, "正在执行/已执行")); return; }
-    if (!Repo::exec(db(), "UPDATE plan SET confirmed=1, adopted=1 WHERE id=?", {id})) {
-        cb(fail(1005, "confirm failed", drogon::k500InternalServerError));
-        return;
-    }
     const std::string mid = p.value("mission_id", "");
-    EventHub::instance().broadcast("plan.state", {{"missionId", mid},
-                                                  {"side", p.value("side", "strike")},
-                                                  {"planId", id}, {"action", "confirmed"}});
-    EventHub::logEvent(mid, "plan.confirmed", {{"planId", id}});
-    cb(ok(Repo::one(db(), "SELECT * FROM plan WHERE id=?", {id})));
+
+    // 幂等：已确认时直接返回成功（不报错），避免前端点第二次就卡住流程。
+    // 关键动作互斥由“同侧只允许一个 confirmed”保证，而非靠报错阻断重放。
+    const bool already = p.value("confirmed", 0) == 1;
+    if (!already) {
+        Repo::exec(db(), "UPDATE plan SET confirmed=0 WHERE mission_id=? AND side=?", {mid, p.value("side", "strike")});
+        if (!Repo::exec(db(), "UPDATE plan SET confirmed=1, adopted=1 WHERE id=?", {id})) {
+            cb(fail(1005, "confirm failed", drogon::k500InternalServerError));
+            return;
+        }
+        EventHub::instance().broadcast("plan.state", {{"missionId", mid},
+                                                      {"side", p.value("side", "strike")},
+                                                      {"planId", id}, {"action", "confirmed"}});
+        EventHub::logEvent(mid, "plan.confirmed", {{"planId", id}});
+    }
+    auto updated = Repo::one(db(), "SELECT * FROM plan WHERE id=?", {id});
+    updated["idempotent"] = already;
+    cb(ok(updated));
 }
 
 // ---------------------------------------------------------------- §3.4

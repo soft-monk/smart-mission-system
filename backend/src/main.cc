@@ -21,18 +21,26 @@ using namespace drogon;
 
 namespace {
 
-// 静态资源托管：/tiles/**、/media/**、/reports/** 各挂一个目录处理器；
-// 前端产物走 Drogon 内置 document root（setDocumentRoot），未知路径自动回落 index.html（SPA 路由）。
+// 静态资源托管：/tiles/**、/media/**、/reports/** 各挂一个目录处理器。
+// 注意：Drogon 的 `{1}` 只捕获**一段**路径，无法匹配 /tiles/11/1681/770.png 这类多段路径，
+// 因此用正则路由抓取前缀之后的全部剩余路径。
+// 前端产物走 Drogon 内置 document root（setDocumentRoot），未知无扩展名路径回落 index.html。
 void registerStatic() {
     const auto& cfg = Config::instance();
 
     auto serveDir = [](const std::string& urlPrefix, const std::string& fsDir) {
-        app().registerHandler(urlPrefix + "/{1}",
-            [fsDir](const HttpRequestPtr& req,
-                    std::function<void(const HttpResponsePtr&)>&& cb,
-                    const std::string& rel) {
-                // 防止路径穿越
-                if (rel.find("..") != std::string::npos) {
+        app().registerHandlerViaRegex(
+            "^" + urlPrefix + "/(.+)$",
+            [fsDir, urlPrefix](const HttpRequestPtr& req,
+                               std::function<void(const HttpResponsePtr&)>&& cb) {
+                // 直接按前缀切串取剩余路径（比依赖正则捕获组更直观可靠）
+                const std::string path = req->getOriginalPath();
+                if (path.size() <= urlPrefix.size() + 1) {
+                    cb(HttpResponse::newNotFoundResponse());
+                    return;
+                }
+                const std::string rel = path.substr(urlPrefix.size() + 1);
+                if (rel.empty() || rel.find("..") != std::string::npos) {
                     cb(HttpResponse::newNotFoundResponse());
                     return;
                 }

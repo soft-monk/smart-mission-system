@@ -14,20 +14,26 @@ const SRC = {
   scan: 'src-scan',
   track: 'src-track',
   trail: 'src-trail',
+  pulse: 'src-pulse',
 }
 
 const LYR = {
   areaFill: 'lyr-area-fill',
   areaLine: 'lyr-area-line',
   link: 'lyr-link',
+  linkGlow: 'lyr-link-glow',
   group: 'lyr-group',
+  groupLabel: 'lyr-group-label',
   target: 'lyr-target',
+  targetGlow: 'lyr-target-glow',
   targetLabel: 'lyr-target-label',
   uav: 'lyr-uav',
+  uavGlow: 'lyr-uav-glow',
   uavLabel: 'lyr-uav-label',
   scan: 'lyr-scan',
   track: 'lyr-track',
   trail: 'lyr-trail',
+  pulse: 'lyr-pulse',
 }
 
 const emptyFC = (): GeoJSON.FeatureCollection => ({ type: 'FeatureCollection', features: [] })
@@ -39,6 +45,8 @@ export class LayerManager {
   private static map: MlMap | null = null
   private static scenario: ScenarioKey = 'scenario-1'
   private static phase: Phase = 'T0'
+  private static pulseTimer: number | null = null
+  private static pulseSeeds: { lng: number; lat: number; color: string }[] = []
 
   static init(map: MlMap) {
     this.map = map
@@ -53,6 +61,7 @@ export class LayerManager {
     add(SRC.scan, emptyFC())
     add(SRC.track, emptyFC())
     add(SRC.trail, emptyFC())
+    add(SRC.pulse, emptyFC())
 
     // ---- 区域多边形（任务分区） ----
     map.addLayer({
@@ -62,6 +71,18 @@ export class LayerManager {
     map.addLayer({
       id: LYR.areaLine, type: 'line', source: SRC.area,
       paint: { 'line-color': ['get', 'color'], 'line-width': 1.4, 'line-dasharray': [4, 3], 'line-opacity': 0.8 },
+    })
+
+    // ---- 脉冲圈（无人机/目标外围扩散环，动画由 rAF 驱动） ----
+    map.addLayer({
+      id: LYR.pulse, type: 'circle', source: SRC.pulse,
+      paint: {
+        'circle-radius': ['get', 'r'],
+        'circle-color': 'rgba(0,0,0,0)',
+        'circle-stroke-color': ['get', 'color'],
+        'circle-stroke-width': 1.4,
+        'circle-stroke-opacity': ['get', 'o'],
+      },
     })
 
     // ---- 扫描热点（同心圆，侦察阶段） ----
@@ -77,7 +98,17 @@ export class LayerManager {
       },
     })
 
-    // ---- 链路 ----
+    // ---- 链路（外发光 + 实线） ----
+    map.addLayer({
+      id: LYR.linkGlow, type: 'line', source: SRC.link,
+      paint: {
+        'line-color': ['get', 'color'],
+        'line-width': 6,
+        'line-opacity': 0.14,
+        'line-blur': 3,
+      },
+    })
+    // ---- 链路（主线） ----
     map.addLayer({
       id: LYR.link, type: 'line', source: SRC.link,
       paint: {
@@ -100,6 +131,17 @@ export class LayerManager {
         'circle-stroke-opacity': 0.6,
       },
     })
+    map.addLayer({
+      id: LYR.groupLabel, type: 'symbol', source: SRC.group,
+      layout: {
+        'text-field': ['get', 'name'],
+        'text-size': 11.5,
+        'text-offset': [0, 1.9],
+        'text-anchor': 'top',
+        'text-allow-overlap': true,
+      },
+      paint: { 'text-color': '#cfe6ff', 'text-halo-color': 'rgba(5,10,20,.9)', 'text-halo-width': 2.2 },
+    })
 
     // ---- 轨迹回溯 ----
     map.addLayer({
@@ -113,7 +155,16 @@ export class LayerManager {
       paint: { 'line-color': '#22d3ee', 'line-width': 1.2, 'line-opacity': 0.45 },
     })
 
-    // ---- 目标 ----
+    // ---- 目标（外光晕 + 环形锁定框 + 标签） ----
+    map.addLayer({
+      id: LYR.targetGlow, type: 'circle', source: SRC.target,
+      paint: {
+        'circle-radius': ['case', ['==', ['get', 'selected'], true], 26, 19],
+        'circle-color': ['get', 'color'],
+        'circle-opacity': 0.16,
+        'circle-blur': 1,
+      },
+    })
     map.addLayer({
       id: LYR.target, type: 'circle', source: SRC.target,
       paint: {
@@ -160,6 +211,57 @@ export class LayerManager {
       },
       paint: { 'text-color': '#9fb3d1', 'text-halo-color': 'rgba(5,10,20,.85)', 'text-halo-width': 1.6 },
     })
+
+    this.startPulse()
+  }
+
+  // ---------------------------------------------------------------- 脉冲动效
+  /** 无人机/目标外围扩散脉冲环（rAF 驱动，半径与透明度随时间变化） */
+  private static startPulse() {
+    if (this.pulseTimer !== null) return
+    const tick = () => {
+      const map = this.map
+      if (!map) return
+      const src = map.getSource(SRC.pulse) as maplibregl.GeoJSONSource | undefined
+      // 无脉冲对象时不做无谓更新
+      if (src && this.pulseSeeds.length > 0) {
+        const t = (performance.now() % 2000) / 2000   // 0..1 周期 2s
+        const feats: GeoJSON.Feature[] = []
+        for (const s of this.pulseSeeds) {
+          for (let k = 0; k < 2; k++) {
+            const phase = (t + k * 0.5) % 1
+            feats.push({
+              type: 'Feature',
+              properties: {
+                r: 5 + phase * 26,
+                o: (1 - phase) * 0.75,
+                color: s.color,
+              },
+              geometry: { type: 'Point', coordinates: [s.lng, s.lat] },
+            })
+          }
+        }
+        src.setData({ type: 'FeatureCollection', features: feats } as never)
+      }
+      this.pulseTimer = window.requestAnimationFrame(tick)
+    }
+    this.pulseTimer = window.requestAnimationFrame(tick)
+  }
+
+  static stopPulse() {
+    if (this.pulseTimer !== null) {
+      window.cancelAnimationFrame(this.pulseTimer)
+      this.pulseTimer = null
+    }
+  }
+
+  /** 更新脉冲种子（目标点） */
+  private static setPulseSeeds(seeds: { lng: number; lat: number; color: string }[]) {
+    this.pulseSeeds = seeds
+    if (seeds.length === 0 && this.map) {
+      const src = this.map.getSource(SRC.pulse) as maplibregl.GeoJSONSource | undefined
+      src?.setData({ type: 'FeatureCollection', features: [] } as never)
+    }
   }
 
   // ---------------------------------------------------------------- 区域
@@ -215,10 +317,15 @@ export class LayerManager {
     set(LYR.scan, recon)
     set(LYR.trail, recon || p === 'T7')
     set(LYR.track, recon && this.scenario === 'scenario-2')
-    set(LYR.target, p !== 'T0' && p !== 'T1' && p !== 'T2')
-    set(LYR.targetLabel, p !== 'T0' && p !== 'T1' && p !== 'T2')
-    set(LYR.link, p === 'T2' || p === 'T3' || p === 'T4' || p === 'T5' || p === 'T6' || p === 'T7')
+    const showTarget = p !== 'T0' && p !== 'T1' && p !== 'T2'
+    set(LYR.target, showTarget)
+    set(LYR.targetLabel, showTarget)
+    set(LYR.targetGlow, showTarget)
+    set(LYR.pulse, showTarget)
+    set(LYR.link, p !== 'T0' && p !== 'T1')
+    set(LYR.linkGlow, p !== 'T0' && p !== 'T1')
     set(LYR.group, p === 'T1' || p === 'T2' || p === 'T3')
+    set(LYR.groupLabel, p === 'T1' || p === 'T2' || p === 'T3')
   }
 
   // ---------------------------------------------------------------- 数据
@@ -278,6 +385,13 @@ export class LayerManager {
     }))
     const src = this.map?.getSource(SRC.target) as maplibregl.GeoJSONSource | undefined
     src?.setData({ type: 'FeatureCollection', features: feats } as never)
+
+    // 高威胁目标带扩散脉冲环（红），其余为琥珀
+    this.setPulseSeeds(
+      targets
+        .filter((t) => t.status !== 'gray')
+        .map((t) => ({ lng: t.lng, lat: t.lat, color: t.status === 'red' ? '#ef4444' : '#f59e0b' })),
+    )
   }
 
   static setUavs(list: UavPosEvent[]) {

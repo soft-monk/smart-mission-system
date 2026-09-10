@@ -25,12 +25,33 @@ function rasterStyle(tileUrl: string, attribution: string): maplibregl.StyleSpec
         tiles: [tileUrl],
         tileSize: 256,
         attribution,
-        maxzoom: 15,
+        maxzoom: 14,
       },
     },
     layers: [
-      { id: 'bg', type: 'background', paint: { 'background-color': '#08111f' } },
-      { id: 'base', type: 'raster', source: 'base', paint: { 'raster-opacity': 0.92 } },
+      { id: 'bg', type: 'background', paint: { 'background-color': '#050d18' } },
+      // 卫星影像 → 压暗 + 去饱和，做成指挥中心深色风格。
+      // 参数经验：brightness-max 低于 0.55 会把影像压成纯黑（影像本身偏暗）；
+      // 这里取「能看清地形纹理、整体明显偏暗」的平衡点。
+      // 注意：MapLibre raster 只支持 raster-* 属性，不要写 'background-tint'。
+      {
+        id: 'base',
+        type: 'raster',
+        source: 'base',
+        paint: {
+          'raster-opacity': 1,
+          'raster-saturation': -0.55,
+          'raster-contrast': 0.16,
+          'raster-brightness-min': 0.03,
+          'raster-brightness-max': 0.62,
+        },
+      },
+      // 冷色调叠加：把中性灰地形统一成青蓝军事风
+      {
+        id: 'base-tint',
+        type: 'background',
+        paint: { 'background-color': 'rgba(6, 26, 52, 0.30)' },
+      },
     ],
   }
 }
@@ -74,11 +95,19 @@ export const MapView: React.FC<{ children?: React.ReactNode }> = ({ children }) 
       LayerManager.init(map)
       setReady(true)
     })
-    map.on('error', () => {
-      // 瓦片不可用时隐藏底图图层，保留深色底（保证演示不黑屏）
-      try {
-        if (map.getLayer('base')) map.setLayoutProperty('base', 'visibility', 'none')
-      } catch { /* noop */ }
+
+    // 瓦片加载失败处理：只统计，不隐藏图层。
+    // 曾经的写法是「任一错误就把 base 图层 visibility 设为 none」，结果一个缺失瓦片
+    // （或其它无关错误）就会把整张底图永久关掉且不恢复 —— 表现为地图全黑但瓦片其实请求成功。
+    let tileFailures = 0
+    map.on('error', (e) => {
+      const msg = String((e as { error?: { message?: string } })?.error?.message ?? '')
+      if (/tile|raster|image|404/i.test(msg)) {
+        tileFailures += 1
+        if (tileFailures === 1 || tileFailures % 20 === 0) {
+          console.warn(`[map] 瓦片加载失败累计 ${tileFailures} 次（底图保持显示，缺失处露出深色底）`, msg)
+        }
+      }
     })
 
     return () => {
@@ -100,6 +129,8 @@ export const MapView: React.FC<{ children?: React.ReactNode }> = ({ children }) 
   return (
     <div style={{ position: 'absolute', inset: 0 }}>
       <div ref={hostRef} style={{ position: 'absolute', inset: 0 }} />
+      {/* 指挥中心观感：暗角 + 极淡坐标网格（不拦截鼠标） */}
+      <div className="map-vignette" />
       {ready && <LayerSync />}
       {children}
     </div>

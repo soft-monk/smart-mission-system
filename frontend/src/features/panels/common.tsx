@@ -4,7 +4,7 @@ import React from 'react'
 import { Icon } from '@/components/ui'
 import { useStore } from '@/stores/useStore'
 
-/** 地图上的浮层卡片（自带 panel 样式与滚动容器） */
+/** 地图上的浮层卡片（自带 panel 样式与滚动容器；hud 开启四角括号，scan 开启扫描光带） */
 export const FloatCard: React.FC<{
   children: React.ReactNode
   title?: string
@@ -12,10 +12,15 @@ export const FloatCard: React.FC<{
   style?: React.CSSProperties
   extra?: React.ReactNode
   maxHeight?: number | string
-}> = ({ children, title, icon, style, extra, maxHeight }) => (
+  hud?: boolean
+  scan?: boolean
+}> = ({ children, title, icon, style, extra, maxHeight, hud = true, scan = false }) => (
   <section
-    className="panel"
-    style={{ pointerEvents: 'auto', display: 'flex', flexDirection: 'column', maxHeight, ...style }}
+    className={`panel ${hud ? 'hud' : ''} ${scan ? 'scanline' : ''}`}
+    style={{
+      pointerEvents: 'auto', display: 'flex', flexDirection: 'column',
+      maxHeight, overflow: 'hidden', ...style,
+    }}
   >
     {title && (
       <header className="panel-title">

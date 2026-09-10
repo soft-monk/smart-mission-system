@@ -132,7 +132,7 @@ export const RightRail: React.FC = () => {
         {/* ============================================================ T0 */}
         {phase === 'T0' && (
           <>
-            <Panel title="AI 任务分析" icon="situation">
+            <Panel hud title="AI 任务分析" icon="situation">
               <DotRow k="风险等级" v={textOfThreat(highThreat >= 2 ? 'high' : highThreat === 1 ? 'mid' : 'low')} tone={threatTone} />
               <DotRow k="敌方威胁强度" v={textOfThreat(highThreat >= 2 ? 'high' : 'mid')} tone={highThreat >= 2 ? 'red' : 'amber'} />
               <DotRow k="通信干扰强度" v={jamTone === 'amber' ? '中' : '低'} tone={jamTone} />
@@ -149,7 +149,7 @@ export const RightRail: React.FC = () => {
               {scenario?.recommended === 1 && <div style={{ marginTop: 6 }}><Tag tone="cyan">系统推荐场景</Tag></div>}
             </Panel>
 
-            <Panel title="任务信息" icon="mission">
+            <Panel hud title="任务信息" icon="mission">
               <KV k="任务名称" v={mission?.task_name ?? '重点区域侦察'} />
               <KV k="任务类型" v={mission?.task_type ?? scenario?.task_type ?? '侦察 / 打击'} />
               <KV k="任务区域" v={mission?.task_region ?? scenario?.task_region ?? '—'} />
@@ -157,7 +157,7 @@ export const RightRail: React.FC = () => {
               <KV k="任务状态" v={<><Dot tone="cyan" />{mission?.status ?? '待执行'}</>} />
             </Panel>
 
-            <Panel title="资源概况" icon="resource">
+            <Panel hud title="资源概况" icon="resource">
               {!resources
                 ? <Empty text="资源数据加载中" />
                 : (
@@ -187,7 +187,7 @@ export const RightRail: React.FC = () => {
         {/* ============================================================ T1 */}
         {phase === 'T1' && (
           <>
-            <Panel title={s1 ? 'AI 推荐编组方案' : 'AI 推荐方案'} icon="mission">
+            <Panel hud title={s1 ? 'AI 推荐编组方案' : 'AI 推荐方案'} icon="mission">
               {!recommendedPlan
                 ? <Empty text="暂无推荐方案" />
                 : (
@@ -233,7 +233,7 @@ export const RightRail: React.FC = () => {
             </Panel>
 
             {recStrike && (
-              <Panel title="推荐打击方案" icon="target">
+              <Panel hud title="推荐打击方案" icon="target">
                 <div className="row" style={{ gap: 8 }}>
                   <b style={{ fontSize: 12.5 }}>{recStrike.name}</b>
                   <span className="spacer" />
@@ -249,7 +249,7 @@ export const RightRail: React.FC = () => {
         {/* ============================================================ T2 */}
         {phase === 'T2' && (
           <>
-            <Panel title="链路指标" icon="antenna">
+            <Panel hud title="链路指标" icon="antenna">
               {!linkMetrics
                 ? <Empty text="链路数据加载中" />
                 : (
@@ -267,12 +267,12 @@ export const RightRail: React.FC = () => {
                 )}
             </Panel>
 
-            <Panel title="网络评估" icon="wifi">
+            <Panel hud title="网络评估" icon="wifi">
               {netAssess.map((n) => <Metric key={n.label} label={n.label} value={n.value} tone={n.tone} />)}
             </Panel>
 
             {!s1 && (
-              <Panel title="云边端拓扑" icon="cloud">
+              <Panel hud title="云边端拓扑" icon="cloud">
                 <DotRow k="云边端拓扑" v="已构建" tone="green" />
                 <DotRow k="云端连接" v="已连接" tone="green" />
                 <DotRow k="边缘节点" v="在线" tone="green" />
@@ -294,7 +294,7 @@ export const RightRail: React.FC = () => {
         {/* ============================================================ T3 / T4 */}
         {(phase === 'T3' || phase === 'T4') && (
           <>
-            <Panel title="集群总体状态" icon="resource">
+            <Panel hud title="集群总体状态" icon="resource">
               {groups.length === 0
                 ? <Empty text="暂无集群数据" />
                 : groups.map((g) => {
@@ -325,7 +325,7 @@ export const RightRail: React.FC = () => {
 
             {phase === 'T4' && (
               <>
-                <Panel title="识别结果" icon="target">
+                <Panel hud title="识别结果" icon="target">
                   {targets.length === 0
                     ? <Empty text="暂无识别结果" />
                     : (
@@ -352,7 +352,7 @@ export const RightRail: React.FC = () => {
                     )}
                 </Panel>
 
-                <Panel title="集群资源" icon="plane">
+                <Panel hud title="集群资源" icon="plane">
                   {!resources
                     ? <Empty text="资源数据加载中" />
                     : UAV_TYPES.map((u) => (
@@ -368,21 +368,21 @@ export const RightRail: React.FC = () => {
         {/* ============================================================ T5 */}
         {phase === 'T5' && (
           <>
-            <Panel title="AI 决策摘要" icon="shield">
+            <Panel hud title="AI 决策摘要" icon="shield">
               <KV k="已生成执行方案" v={`${(s1 ? strikePlans : groupPlans).length || 3} 套`} />
               <KV k="推荐最优方案" v={s1 ? '方案二 多集群协同压制' : '方案二 集群协同攻击'} vClass="v-cyan" />
               <DotRow k="边缘自主能力" v={s1 ? '可执行' : '已具备'} tone="green" />
               <DotRow k="云端优化支持" v="已启用" tone="green" />
             </Panel>
 
-            <Panel title="云边端协同状态" icon="cloud">
+            <Panel hud title="云边端协同状态" icon="cloud">
               <DotRow k="云端算力中心" v="在线" tone="green" />
               <DotRow k="边缘指控单元" v="在线" tone="green" />
               <DotRow k="前端无人集群" v={`${groups.length || 6} 集群在线`} tone="green" />
               <DotRow k="链路稳定度" v={`${mm?.link_stability ?? 96}%`} tone="green" />
             </Panel>
 
-            <Panel title="任务环境评估" icon="area">
+            <Panel hud title="任务环境评估" icon="area">
               <DotRow k="目标复杂度" v={textOfThreat(highThreat >= 2 ? 'high' : 'mid')} tone={threatTone} />
               <DotRow k="通信环境" v={linkMetrics && linkMetrics.lossRate > 1 ? '受限' : '良好'} tone={linkMetrics && linkMetrics.lossRate > 1 ? 'amber' : 'green'} />
               <DotRow k="电磁环境" v="中等干扰" tone="amber" />
@@ -401,7 +401,7 @@ export const RightRail: React.FC = () => {
         {/* ============================================================ T6 */}
         {phase === 'T6' && (
           <>
-            <Panel title="跟踪状态" icon="crosshair">
+            <Panel hud title="跟踪状态" icon="crosshair">
               <Metric label="目标跟踪稳定度" value={execution?.trackingStability ?? 87} tone="green" />
               <DotRow
                 k="位置校正状态"
@@ -411,7 +411,7 @@ export const RightRail: React.FC = () => {
               <KV k="偏差量" v={`${execution?.deviationM ?? 12} m`} vClass="v-amber" />
             </Panel>
 
-            <Panel title="协同链路" icon="antenna">
+            <Panel hud title="协同链路" icon="antenna">
               {!execution?.coopLink
                 ? <Empty text="暂无协同链路数据" />
                 : (
@@ -423,7 +423,7 @@ export const RightRail: React.FC = () => {
                 )}
             </Panel>
 
-            <Panel title="命中概率" icon="target">
+            <Panel hud title="命中概率" icon="target">
               <div className="row" style={{ gap: 12 }}>
                 <Ring
                   value={execution?.hitProbability ?? 84}
@@ -439,7 +439,7 @@ export const RightRail: React.FC = () => {
               </div>
             </Panel>
 
-            <Panel title="同步状态" icon="wifi">
+            <Panel hud title="同步状态" icon="wifi">
               {!execution?.sync
                 ? <Empty text="暂无同步数据" />
                 : (
@@ -452,7 +452,7 @@ export const RightRail: React.FC = () => {
             </Panel>
 
             {!s1 && (
-              <Panel title="边缘节点决策结果" icon="server">
+              <Panel hud title="边缘节点决策结果" icon="server">
                 <KV k="攻击方式" v="协同攻击" />
                 <KV k="攻击时序" v={execution?.attackTiming?.label ?? '边缘节点自主调整中'} vClass="v-amber" />
                 <KV k="打击优先级" v="目标002 › 目标001 › 目标003" />
@@ -479,7 +479,7 @@ export const RightRail: React.FC = () => {
         {/* ============================================================ T7 */}
         {phase === 'T7' && (
           <>
-            <Panel title={s1 ? '目标状态' : '任务执行效能评估'} icon="target">
+            <Panel hud title={s1 ? '目标状态' : '任务执行效能评估'} icon="target">
               {s1
                 ? (
                   <>
@@ -509,7 +509,7 @@ export const RightRail: React.FC = () => {
             </Panel>
 
             {s1 ? (
-              <Panel title="集群回收" icon="plane">
+              <Panel hud title="集群回收" icon="plane">
                 <div className="row" style={{ gap: 12 }}>
                   <Ring value={78} size={72} tone="var(--green)" sub="回收进度" />
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -525,7 +525,7 @@ export const RightRail: React.FC = () => {
               </Panel>
             ) : (
               <>
-                <Panel title="资源消耗统计" icon="resource">
+                <Panel hud title="资源消耗统计" icon="resource">
                   {(() => {
                     const rows = parseResourceRows(mm?.resource_used)
                     const total = rows.reduce((n, r) => n + r.count, 0)
@@ -561,7 +561,7 @@ export const RightRail: React.FC = () => {
             )}
 
             {s1 && (
-              <Panel title="关键结果" icon="shield">
+              <Panel hud title="关键结果" icon="shield">
                 <KV k="打击成功率" v={`${Math.round(((assessment?.destroyed ?? 3) / Math.max(1, targets.length)) * 100) || 92}%`} vClass="v-green" />
                 <KV k="组网时长" v={`${Math.round((mm?.mesh_duration_sec ?? 2280) / 60)} 分钟`} />
                 <KV k="覆盖区域" v={`${mm?.coverage_rate ?? 93}%`} />
@@ -574,7 +574,7 @@ export const RightRail: React.FC = () => {
             )}
 
             {!s1 && !latestReport && (
-              <Panel title="报告生成" icon="file">
+              <Panel hud title="报告生成" icon="file">
                 <div style={{ fontSize: 12, color: 'var(--text-1)', lineHeight: 1.7 }}>
                   任务报告尚未生成，可点击下方【导出报告】或底部【导出任务报告】生成 HTML 报告并打开。
                 </div>
@@ -602,7 +602,7 @@ const VoicePanel: React.FC<{
   const replyLines = recent.filter((t) => t.kind === 'reply')
 
   return (
-    <Panel title="AI 语音交互" icon="mic">
+    <Panel hud title="AI 语音交互" icon="mic">
       {recent.length === 0
         ? (
           <div style={{ fontSize: 12, color: 'var(--text-1)', lineHeight: 1.75 }}>

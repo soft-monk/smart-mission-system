@@ -404,19 +404,34 @@ export const useStore = create<State>((set, get) => ({
     }
   },
 
+  // 以下动作均「不抛异常」：失败只记时间线提示。
+  // 原因：面板的推进按钮是「确认 → 下一阶段」串联，若确认抛异常会连带中断 nextPhase，
+  // 表现为「按钮点了没反应、流程卡死」。流程推进的可靠性优先于错误抛出的严格性。
   async adoptPlan(id) {
-    await api.adoptPlan(id)
+    try {
+      await api.adoptPlan(id)
+    } catch (e) {
+      get().pushTimeline({ kind: 'tip', text: `采用方案未生效：${(e as Error).message}` })
+    }
     await get().refreshPlans()
     await get().refreshGroups()
   },
 
   async optimizePlan(id) {
-    await api.optimizePlan(id)
+    try {
+      await api.optimizePlan(id)
+    } catch (e) {
+      get().pushTimeline({ kind: 'tip', text: `自动优化失败：${(e as Error).message}` })
+    }
     await get().refreshPlans()
   },
 
   async confirmPlan(id) {
-    await api.confirmPlan(id)
+    try {
+      await api.confirmPlan(id)
+    } catch (e) {
+      get().pushTimeline({ kind: 'tip', text: `确认方案失败：${(e as Error).message}` })
+    }
     await get().refreshPlans()
   },
 
@@ -601,3 +616,40 @@ export const useStore = create<State>((set, get) => ({
 }))
 
 export { PHASE_ORDER, PHASE_TITLES }
+
+// 调试/自动化钩子：便于用浏览器控制台或 CDP 驱动流程，也便于现场排障
+declare global {
+  interface Window {
+    __MAPAPP__?: {
+      get: () => ReturnType<typeof useStore.getState>
+      setPhase: (p: Phase) => Promise<void>
+      nextPhase: () => Promise<void>
+      prevPhase: () => Promise<void>
+      state: () => Record<string, unknown>
+    }
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.__MAPAPP__ = {
+    get: () => useStore.getState(),
+    setPhase: (p) => useStore.getState().setPhase(p),
+    nextPhase: () => useStore.getState().nextPhase(),
+    prevPhase: () => useStore.getState().prevPhase(),
+    state: () => {
+      const s = useStore.getState()
+      return {
+        phase: s.phase,
+        phaseTitle: s.phaseTitle,
+        progress: s.progress,
+        scenarioKey: s.scenarioKey,
+        wsStatus: s.wsStatus,
+        missionId: s.mission?.id ?? null,
+        targets: s.targets.length,
+        groupPlans: s.groupPlans.length,
+        strikePlans: s.strikePlans.length,
+        timeline: s.timeline.length,
+      }
+    },
+  }
+}
