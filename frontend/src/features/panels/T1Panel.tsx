@@ -2,9 +2,84 @@
 // 左：四型无人机资源列表；中：三套编组方案卡；底部动作条与编组概况。
 import React, { useEffect, useMemo, useState } from 'react'
 import { useStore } from '@/stores/useStore'
-import { Bar, Btn, Dot, Empty, Icon, KV, Stars, Tag } from '@/components/ui'
+import { Bar, Btn, Dot, Empty, Icon, KV, Stat, Stars, Tag } from '@/components/ui'
 import { BottomBar, FloatCard, Sub } from './common'
 import type { Plan } from '@/api/types'
+
+/** 集群名 → 该集群的四型配比（演示级：按方案给出的资源总数与集群序位分配） */
+interface MiniChips { optical: number; radar: number; electronic: number; comm: number }
+
+function allocFor(clusters: string[], totals: Record<string, number>): MiniChips[] {
+  const n = Math.max(1, clusters.length)
+  const T = {
+    optical: totals.optical ?? 0,
+    radar: totals.radar ?? 0,
+    electronic: totals.electronic ?? 0,
+    comm: totals.comm ?? 0,
+  }
+  const out: MiniChips[] = []
+  let remO = T.optical, remR = T.radar, remE = T.electronic, remC = T.comm
+  for (let i = 0; i < n; i++) {
+    const left = n - i
+    const take = (rem: number, prefer: number[]) => {
+      const w = prefer[i % prefer.length]
+      const v = i === n - 1 ? rem : Math.min(rem, w)
+      return Math.max(0, v)
+    }
+    const o = take(remO, [6, 5, 0, 2, 1, 4])
+    remO -= o
+    const r = take(remR, [3, 2, 5, 1, 2, 2])
+    remR -= r
+    const e = take(remE, [2, 2, 1, 2, 7, 2])
+    remE -= e
+    const c = take(remC, [1, 1, 1, 6, 1, 2])
+    remC -= c
+    void left
+    out.push({ optical: o, radar: r, electronic: e, comm: c })
+  }
+  return out
+}
+
+const TYPE_CHIPS: { key: keyof MiniChips; label: string; tone: string }[] = [
+  { key: 'optical', label: '光电', tone: '#22d3ee' },
+  { key: 'radar', label: '雷达', tone: '#f59e0b' },
+  { key: 'electronic', label: '电子', tone: '#a855f7' },
+  { key: 'comm', label: '通信', tone: '#22c55e' },
+]
+
+/** 单个集群配比行（原型图里成片的迷你参数格） */
+const ClusterRow: React.FC<{ name: string; chips: MiniChips }> = ({ name, chips }) => (
+  <div
+    style={{
+      display: 'grid',
+      gridTemplateColumns: '1fr repeat(4, minmax(30px, auto))',
+      gap: 4,
+      alignItems: 'center',
+      padding: '4px 6px',
+      borderRadius: 4,
+      background: 'rgba(10, 22, 40, 0.55)',
+      border: '1px solid rgba(80, 160, 255, 0.13)',
+      marginBottom: 4,
+    }}
+  >
+    <span style={{ fontSize: 11, color: 'var(--text-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      {name}
+    </span>
+    {TYPE_CHIPS.map((c) => (
+      <span
+        key={c.key}
+        title={`${c.label} ${chips[c.key]}`}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 3, justifyContent: 'flex-end',
+          fontSize: 10.5, color: c.tone, fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        <i style={{ width: 5, height: 5, borderRadius: 1, background: c.tone, display: 'inline-block' }} />
+        {chips[c.key]}
+      </span>
+    ))}
+  </div>
+)
 
 const TYPE_LABEL: Record<string, string> = {
   optical: '光电无人机', radar: '雷达无人机', electronic: '电子无人机', comm: '通信无人机',
@@ -80,29 +155,50 @@ export const T1Panel: React.FC = () => {
 
   return (
     <>
-      {/* 左：无人机类型列表 */}
+      {/* 左：无人机类型列表（原型图：机型图标 + 总数/可用数 + 能力标签 + 彩色分配胶囊） */}
       <FloatCard
-        title="无人机类型"
+        title="无人机类型列表"
         icon="plane"
         style={{ position: 'absolute', left: 12, top: 64, width: 262 }}
-        maxHeight={340}
+        maxHeight="calc(100% - 190px)"
       >
         {resources ? (
           resources.items.map((r) => (
-            <div key={r.type} style={{ padding: '7px 0', borderBottom: '1px solid rgba(80,160,255,.10)' }}>
-              <div className="row">
+            <div
+              key={r.type}
+              style={{
+                padding: '8px 0', borderBottom: '1px dashed rgba(80,160,255,.14)',
+              }}
+            >
+              <div className="row" style={{ gap: 8 }}>
+                <span style={{
+                  width: 30, height: 30, flex: '0 0 auto', borderRadius: 6,
+                  display: 'grid', placeItems: 'center',
+                  background: 'rgba(34,211,238,.10)', border: '1px solid rgba(34,211,238,.28)',
+                  color: TYPE_CHIPS.find((c) => c.key === r.type)?.tone ?? 'var(--cyan)',
+                }}>
+                  <Icon name={r.type === 'radar' ? 'radar' : r.type === 'comm' ? 'antenna' : r.type === 'electronic' ? 'wave' : 'eye'} size={17} />
+                </span>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 700 }}>{TYPE_LABEL[r.type] ?? r.type}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 2 }}>
+                    总数量 <b className="v-cyan">{r.total}</b>
+                    <span style={{ margin: '0 6px' }} />
+                    可用数量 <b className="v-cyan">{r.available}</b>
+                  </div>
+                </div>
                 <Dot tone="green" />
-                <b style={{ fontSize: 12.5 }}>{TYPE_LABEL[r.type] ?? r.type}</b>
-                <span className="spacer" />
-                <span style={{ fontSize: 11, color: 'var(--text-2)' }}>可用 {r.available}</span>
               </div>
-              <div className="row" style={{ marginTop: 4, gap: 10, fontSize: 11, color: 'var(--text-2)' }}>
-                <span>总数 {r.total}</span>
-                <span>已分配 {r.allocated}</span>
-                <span>待分配 {r.pending}</span>
+              <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 5 }}>
+                任务能力
+                {String(r.ability_tags).split('/').map((t) => (
+                  <span key={t} className="tag cyan" style={{ marginLeft: 4 }}>{t.trim()}</span>
+                ))}
               </div>
-              <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 3 }}>
-                任务能力：{r.ability_tags}
+              <div className="row" style={{ marginTop: 5, gap: 5, fontSize: 11 }}>
+                <span style={{ color: 'var(--text-2)' }}>当前分配</span>
+                <span className="tag blue">已分配 {r.allocated}</span>
+                <span className="tag gray">待分配 {r.pending}</span>
               </div>
             </div>
           ))
@@ -111,13 +207,14 @@ export const T1Panel: React.FC = () => {
         )}
       </FloatCard>
 
-      {/* 中：三套编组方案 */}
+      {/* 中：三套编组方案（2 列网格，原型图为并排方案卡 + 逐集群配比） */}
       <div style={{
-        position: 'absolute', left: 288, top: 64, right: 332, bottom: 92,
-        display: 'flex', gap: 10, pointerEvents: 'none', alignItems: 'flex-start',
+        position: 'absolute', left: 288, top: 64, right: 332, bottom: 172,
+        display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+        gap: 10, pointerEvents: 'none', alignContent: 'start',
       }}>
         {plans.length === 0 && (
-          <div className="panel" style={{ pointerEvents: 'auto', padding: 16, flex: 1 }}>
+          <div className="panel" style={{ pointerEvents: 'auto', padding: 16, gridColumn: '1 / -1' }}>
             <Empty text="编组方案生成中…" />
           </div>
         )}
@@ -125,13 +222,14 @@ export const T1Panel: React.FC = () => {
           const active = p.id === activePlanId
           const rec = p.recommended === 1
           const clusters = parseGroups(p)
+          const alloc = allocFor(clusters, totals)
           return (
             <button
               key={p.id}
               onClick={() => setSelectedPlanId(p.id)}
               className="panel"
               style={{
-                pointerEvents: 'auto', flex: 1, minWidth: 0, textAlign: 'left', cursor: 'pointer',
+                pointerEvents: 'auto', minWidth: 0, textAlign: 'left', cursor: 'pointer',
                 fontFamily: 'inherit', color: 'var(--text-0)', padding: 0, overflow: 'hidden',
                 borderColor: rec ? 'var(--cyan)' : active ? 'var(--panel-border-strong)' : 'var(--panel-border)',
                 background: rec ? 'linear-gradient(180deg,rgba(34,211,238,.14),rgba(34,211,238,.02))' : undefined,
@@ -148,18 +246,22 @@ export const T1Panel: React.FC = () => {
                 {p.subtitle && (
                   <div style={{ fontSize: 11.5, color: 'var(--text-2)', marginBottom: 7 }}>{p.subtitle}</div>
                 )}
-                <div className="row" style={{ gap: 6, marginBottom: 8, fontSize: 11 }}>
-                  <span className="v-cyan">光电 {totals.optical ?? 0}</span>
-                  <span className="v-cyan">雷达 {totals.radar ?? 0}</span>
-                  <span className="v-cyan">电子 {totals.electronic ?? 0}</span>
-                  <span className="v-cyan">通信 {totals.comm ?? 0}</span>
+                {/* 方案资源合计（原型图：光电/雷达/电子/通信 四个合计） */}
+                <div className="row" style={{ gap: 8, marginBottom: 8, fontSize: 11, flexWrap: 'wrap' }}>
+                  {TYPE_CHIPS.map((c) => (
+                    <span key={c.key} style={{ color: c.tone }}>
+                      <i style={{ width: 6, height: 6, borderRadius: 1, background: c.tone, display: 'inline-block', marginRight: 3 }} />
+                      {c.label} {totals[c.key] ?? 0}
+                    </span>
+                  ))}
                 </div>
+                {/* 逐集群四型配比（原型图的核心信息密度来源） */}
                 {clusters.length > 0 && (
                   <>
                     <div className="subhead" style={{ margin: '4px 0 5px' }}>任务集群（{clusters.length}）</div>
-                    <ol style={{ margin: 0, paddingLeft: 16, fontSize: 11.5, color: 'var(--text-1)', lineHeight: 1.75 }}>
-                      {clusters.map((c) => <li key={c}>{c}</li>)}
-                    </ol>
+                    {clusters.map((c, i) => (
+                      <ClusterRow key={c + i} name={c} chips={alloc[i]} />
+                    ))}
                   </>
                 )}
                 <div className="row" style={{ marginTop: 9, gap: 8, fontSize: 11, color: 'var(--text-2)' }}>
@@ -172,8 +274,8 @@ export const T1Panel: React.FC = () => {
                 {p.success_rate !== undefined && (
                   <div style={{ marginTop: 8 }}>
                     <div className="row" style={{ fontSize: 11, color: 'var(--text-2)' }}>
-                      <span>推荐评分</span><span className="spacer" />
-                      <b className="v-green">{p.success_rate}%</b>
+                      <span>{rec ? '推荐评分' : '评分'}</span><span className="spacer" />
+                      <b className="v-green" style={{ fontSize: 13 }}>{p.success_rate}%</b>
                     </div>
                     <Bar value={p.success_rate} tone="green" />
                   </div>
@@ -214,28 +316,31 @@ export const T1Panel: React.FC = () => {
         </FloatCard>
       )}
 
+      {/* 编组概况数据行（原型图底部的四格统计条）——放在底部动作条正上方、避开左侧资源卡 */}
+      <div style={{
+        position: 'absolute', left: 288, right: 332, bottom: 76, pointerEvents: 'auto',
+        display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 8,
+      }}>
+        <Stat k="当前编组资源" v={`${allocatedTotal}`} u={`/${totalAll}`} tone="var(--cyan)" />
+        <Stat k="待分配资源" v={`${resources?.pendingTotal ?? 0}`} u="架" />
+        <Stat k="资源利用率" v={`${utilization}`} u="%" tone="var(--green)" />
+        <Stat k="AI 状态" v="运行中" tone="var(--green)" />
+      </div>
+
       {/* 底部：编组概况 + 动作按钮 */}
       <BottomBar right={320}>
         <div className="row" style={{ gap: 16, fontSize: 12 }}>
           <span>
-            <span style={{ color: 'var(--text-2)' }}>当前编组资源 </span>
-            <b className="v-cyan">{allocatedTotal}/{totalAll}</b>
-          </span>
-          <span>
-            <span style={{ color: 'var(--text-2)' }}>待分配资源 </span>
-            <b>{resources?.pendingTotal ?? 0}</b>
-          </span>
-          <span>
-            <span style={{ color: 'var(--text-2)' }}>资源利用率 </span>
-            <b className="v-green">{utilization}%</b>
-          </span>
-          <span>
             <span style={{ color: 'var(--text-2)' }}>集群数量 </span>
-            <b>{groupClusters.length}</b>
+            <b className="v-cyan">{groupClusters.length}</b>
           </span>
           <span>
             <span style={{ color: 'var(--text-2)' }}>链路就绪 </span>
             <b className="v-green">96%</b>
+          </span>
+          <span>
+            <span style={{ color: 'var(--text-2)' }}>在线状态 </span>
+            <b className="v-green">{resources?.onlineRate ?? 100}%</b>
           </span>
         </div>
 
