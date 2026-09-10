@@ -6,6 +6,8 @@ backend/static/*
 
 # === C++ 后端 ===
 backend/build/
+backend/bin/
+backend/data/
 build/
 CMakeCache.txt
 CMakeFiles/

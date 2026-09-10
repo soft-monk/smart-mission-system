@@ -1,0 +1,43 @@
+{
+  "_comment": "智能任务管理系统 · Python AI 桥配置。仅监听本机 127.0.0.1:8090（契约 §1），由 C++ 后端反代 /api/v1/ai/*。apiKey 建议留空并改用环境变量 OPENAI_API_KEY。",
+  "host": "127.0.0.1",
+  "port": 8090,
+
+  "apiKey": "",
+  "baseUrl": "https://api.openai.com/v1",
+
+  "chatModel": "gpt-4o-mini",
+  "sttModel": "whisper-1",
+  "ttsModel": "tts-1",
+  "ttsVoice": "alloy",
+
+  "enableLlm": true,
+  "enableStt": true,
+  "enableTts": true,
+
+  "llmTimeoutSec": 12.0,
+  "speechTimeoutSec": 20.0,
+  "connectTimeoutSec": 5.0,
+  "llmJsonMode": true,
+  "maxTtsChars": 4000,
+
+  "ruleFirstForDemoIntents": false,
+  "healthProbe": true,
+  "healthProbeIntervalSec": 60.0,
+
+  "ffmpegPath": "",
+
+  "logLevel": "INFO",
+  "sceneDefault": "scenario-1",
+
+  "ttsFallback": {
+    "mode": "tone",
+    "minSeconds": 0.3,
+    "secondsPerChar": 0.05,
+    "maxSeconds": 4.0,
+    "sampleRate": 16000,
+    "frequency": 660.0,
+    "amplitude": 0.25,
+    "preferMp3": true
+  }
+}

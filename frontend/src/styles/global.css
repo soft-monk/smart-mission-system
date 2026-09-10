@@ -1,0 +1,203 @@
+/* 设计 tokens —— 契约 §8（深色科技风；语义色：绿=正常/已连接 黄=弱/进行中 红=高威胁/高价值 灰=已失效） */
+:root {
+  --bg-0: #050a14;
+  --bg-1: #0a1220;
+  --bg-2: #0f1a2e;
+  --panel: rgba(16, 28, 48, 0.72);
+  --panel-solid: #0e1b30;
+  --panel-border: rgba(80, 160, 255, 0.22);
+  --panel-border-strong: rgba(90, 180, 255, 0.5);
+
+  --cyan: #22d3ee;
+  --blue: #3b82f6;
+  --green: #22c55e;
+  --amber: #f59e0b;
+  --red: #ef4444;
+  --purple: #a855f7;
+
+  --text-0: #e8f1ff;
+  --text-1: #9fb3d1;
+  --text-2: #64789b;
+
+  --radius: 10px;
+  --radius-sm: 6px;
+  --blur: 8px;
+  --shadow-glow: 0 0 18px rgba(34, 211, 238, 0.18);
+
+  --topbar-h: 52px;
+  --statusbar-h: 40px;
+  --nav-w: 78px;
+
+  --font: 'Microsoft YaHei', 'PingFang SC', 'Noto Sans SC', system-ui, -apple-system, sans-serif;
+  --mono: 'Cascadia Mono', Consolas, 'Courier New', monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg-0);
+  color: var(--text-0);
+  font-family: var(--font);
+  font-size: 14px;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 滚动条 */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(80, 160, 255, 0.28); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(80, 160, 255, 0.45); }
+
+/* ---------------------------------------------------------------- 基础原子 */
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+}
+
+.panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-0);
+  border-bottom: 1px solid var(--panel-border);
+  letter-spacing: 0.5px;
+}
+.panel-title .ico { color: var(--cyan); display: inline-flex; }
+.panel-body { padding: 10px 12px; }
+
+.kv {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 0;
+  font-size: 12.5px;
+}
+.kv .k { color: var(--text-1); flex: 0 0 auto; }
+.kv .v { color: var(--text-0); font-weight: 600; text-align: right; }
+
+.v-green { color: var(--green) !important; }
+.v-amber { color: var(--amber) !important; }
+.v-red { color: var(--red) !important; }
+.v-cyan { color: var(--cyan) !important; }
+.v-blue { color: var(--blue) !important; }
+.v-dim { color: var(--text-2) !important; }
+
+.dot {
+  display: inline-block;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+  background: var(--text-2);
+}
+.dot.green { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.dot.amber { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
+.dot.red { background: var(--red); box-shadow: 0 0 6px var(--red); }
+.dot.cyan { background: var(--cyan); box-shadow: 0 0 6px var(--cyan); }
+.dot.gray { background: #6b7280; }
+
+.tag {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 16px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.tag.cyan { color: var(--cyan); border-color: rgba(34, 211, 238, 0.5); background: rgba(34, 211, 238, 0.12); }
+.tag.green { color: var(--green); border-color: rgba(34, 197, 94, 0.5); background: rgba(34, 197, 94, 0.12); }
+.tag.amber { color: var(--amber); border-color: rgba(245, 158, 11, 0.5); background: rgba(245, 158, 11, 0.12); }
+.tag.red { color: var(--red); border-color: rgba(239, 68, 68, 0.5); background: rgba(239, 68, 68, 0.12); }
+.tag.blue { color: var(--blue); border-color: rgba(59, 130, 246, 0.5); background: rgba(59, 130, 246, 0.12); }
+.tag.gray { color: var(--text-2); border-color: rgba(120, 140, 170, 0.4); background: rgba(120, 140, 170, 0.1); }
+
+/* 按钮 */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 18px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--panel-border-strong);
+  background: rgba(20, 40, 70, 0.6);
+  color: var(--text-0);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+  white-space: nowrap;
+}
+.btn:hover { background: rgba(30, 60, 100, 0.8); border-color: var(--cyan); }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn.primary {
+  background: linear-gradient(180deg, rgba(34, 211, 238, 0.22), rgba(34, 211, 238, 0.08));
+  border-color: var(--cyan);
+  color: #d9fbff;
+  font-weight: 700;
+  box-shadow: var(--shadow-glow);
+}
+.btn.primary:hover { background: linear-gradient(180deg, rgba(34, 211, 238, 0.34), rgba(34, 211, 238, 0.14)); }
+.btn.danger { border-color: var(--red); color: #ffd9d9; background: rgba(239, 68, 68, 0.16); }
+.btn.danger:hover { background: rgba(239, 68, 68, 0.28); }
+.btn.ghost { background: transparent; }
+.btn.sm { padding: 6px 12px; font-size: 12px; }
+
+/* 进度条 */
+.bar {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(80, 160, 255, 0.15);
+  overflow: hidden;
+}
+.bar > i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--blue), var(--cyan));
+  transition: width 0.35s ease;
+}
+.bar.green > i { background: linear-gradient(90deg, #16a34a, var(--green)); }
+.bar.amber > i { background: linear-gradient(90deg, #d97706, var(--amber)); }
+.bar.red > i { background: linear-gradient(90deg, #b91c1c, var(--red)); }
+
+/* 网格辅助 */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.row { display: flex; align-items: center; gap: 8px; }
+.row.wrap { flex-wrap: wrap; }
+.spacer { flex: 1; }
+
+/* 分区小标题 */
+.subhead {
+  font-size: 11.5px;
+  color: var(--text-2);
+  letter-spacing: 1px;
+  margin: 10px 0 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px dashed rgba(80, 160, 255, 0.18);
+}
+
+.fade-in { animation: fadeIn 0.25s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+.pulse { animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.45; } }

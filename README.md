@@ -34,11 +34,53 @@ mapApp/
 | 开发环境与资源下载清单 | docs/03-参考/ | 工具链/数据/素材/API 下载地址与验证清单 |
 | AI 协作开发规范与文档体系指南 | docs/02-技术需求/ | Agent 协作开发规范（文档驱动） |
 
+## 快速开始（全量开发版）
+
+```bat
+:: 1) 一次性构建（前端 + C++ 后端）
+scripts\build_all.bat
+
+:: 2) 启动（AI 桥 + 服务端）
+scripts\start_all.bat
+
+:: 3) 浏览器访问
+::    http://127.0.0.1:8080/
+::    局域网其它终端：http://<本机IP>:8080/
+
+:: 4) 停止
+scripts\stop_all.bat
+```
+
+**运行前提**
+
+| 依赖 | 说明 |
+|---|---|
+| VS2022（C++ 桌面开发） | 提供 MSVC 与自带 CMake；路径见 `scripts/build_all.bat` 内 `CMAKE` |
+| vcpkg（`C:\vcpkg`） | 提供 drogon / sqlite3 / nlohmann-json；首次配置会自动安装 |
+| Node.js 18+ | 构建前端（`npm install` + `vite build`） |
+| Python 3.11+ | AI 桥；`ai\run_bridge.bat` 会自动建 `.venv` 并装依赖 |
+
+**端口约定**（可由 `backend/config.json` 与 `ai/config.json` 修改）
+
+| 服务 | 地址 |
+|---|---|
+| C++ 服务端（HTTP/WS） | `0.0.0.0:8080` |
+| Python AI 桥（仅本机） | `127.0.0.1:8090`，由 C++ 反代 `/api/v1/ai/*` |
+| UDP 组播遥测 | `239.10.10.10:45454`（无外部源时内置模拟器驱动） |
+
+**已知环境坑（已在脚本中规避）**
+
+- 若系统/父进程环境同时存在 `NO_PROXY` 与 `no_proxy`，.NET 的环境字典会因大小写不敏感抛
+  “已添加项”，导致 **MSBuild/CL.exe 直接失败**；`scripts\*.bat` 会先清空这些变量再调用编译器。
+- 若 `no_proxy` 中含 `[::1]` 这类写法，`httpx` 建客户端时会抛 `InvalidURL` 使 AI 桥启动失败；
+  桥已改为 `trust_env=False`（不读取代理环境变量），启动不再受此影响。
+
 ## 开始
 
 1. 环境准备：见 `docs/03-参考/开发环境与资源下载清单.md`
-2. 完整系统需求与阶段划分（P0 从第 7.3 节开始）：见 `docs/02-技术需求/智能任务管理系统_技术需求文档.md`
+2. 完整系统需求与阶段划分：见 `docs/02-技术需求/智能任务管理系统_技术需求文档.md`
 3. 架构级设计：见 `docs/04-设计/概要设计文档.md`
+4. **研发接口基准**（REST/WS/数据模型/文案/设计 tokens）：见 `docs/05-开发/开发接口契约规格书.md`
 
 ## 构建与部署流水线（B/S）
 

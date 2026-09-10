@@ -1,0 +1,11 @@
+# Smart Mission System - Python AI bridge (ai) dependencies
+# Install: .venv\Scripts\python.exe -m pip install -r requirements.txt
+# NOTE: keep this file ASCII-only (pip reads it with the system locale codec on Windows).
+# The bridge only needs a web framework plus an HTTP client: online LLM/STT/TTS are
+# called directly over OpenAI-compatible endpoints with httpx, so no openai SDK needed.
+
+fastapi>=0.110,<1.0
+uvicorn[standard]>=0.27
+httpx>=0.26
+python-multipart>=0.0.9
+pydantic>=2.6

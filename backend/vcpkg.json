@@ -1,0 +1,11 @@
+{
+  "name": "mapapp-backend",
+  "version-string": "1.0.0",
+  "description": "智能任务管理系统 C++ 后端（Drogon）：静态托管 + REST /api/v1 + WebSocket 广播 + UDP 组播接入 + SQLite",
+  "dependencies": [
+    "drogon",
+    "sqlite3",
+    "nlohmann-json"
+  ],
+  "builtin-baseline": "3d33b7f7a8121da6e4fa80b35618fc8e960be686"
+}

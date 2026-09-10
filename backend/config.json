@@ -1,0 +1,29 @@
+{
+  "listenAddr": "0.0.0.0",
+  "listenPort": 8080,
+  "threadNum": 0,
+
+  "aiBridgeHost": "127.0.0.1",
+  "aiBridgePort": 8090,
+
+  "udpGroup": "239.10.10.10",
+  "udpPort": 45454,
+  "udpEnabled": true,
+  "nodeTimeoutMs": 10000,
+
+  "staticDir": "static",
+  "tilesDir": "../tiles",
+  "mediaDir": "../media",
+  "reportsDir": "data/reports",
+  "dbPath": "data/mapapp.db",
+  "scenariosDir": "config/scenarios",
+
+  "mapCenterLng": 116.3974,
+  "mapCenterLat": 39.9093,
+  "mapZoom": 11,
+  "mapMinZoom": 3,
+  "mapMaxZoom": 15,
+
+  "simEnabled": true,
+  "simIntervalMs": 1000
+}
