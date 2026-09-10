@@ -121,11 +121,10 @@ export const T6Panel: React.FC = () => {
   const guide = useStore((s) => s.guide)
   const replan = useStore((s) => s.replan)
   const pushTimeline = useStore((s) => s.pushTimeline)
-  const isS2 = useStore((s) => s.scenarioKey) === 'scenario-2'
-  // 默认停在「动作页签」：场景一 = T6-2 引导控制（含【确认引导】推进按钮），
-  // 场景二 = T6-1（该场景 T6-1 无按钮、只有攻击时序，T6-2 为回传画面）。
+  // 默认停在「动作页签」：两场景的推进按钮都在 T6-2
+  // （场景一 T6-2 = 引导控制，含【确认引导】；场景二 T6-2 = 实时回传+引导，含【确认执行同步】）。
   // 这样进入阶段即可看到可执行动作，避免"看不到按钮以为流程断了"。
-  const [mode, setMode] = useState<'T6-1' | 'T6-2'>(isS2 ? 'T6-1' : 'T6-2')
+  const [mode, setMode] = useState<'T6-1' | 'T6-2'>('T6-2')
 
   // ---- 演示值兜底（契约 §7.5）----
   const stability = execution?.trackingStability ?? 87
