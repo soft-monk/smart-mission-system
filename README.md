@@ -17,7 +17,7 @@ mapApp/
 │  ├─ src/                   # C++ 源码
 │  └─ static/                # 前端产物落点（构建期生成，不入库）
 ├─ ai/                       # Python AI 桥（FastAPI：LLM/ASR/TTS 在线 API）
-├─ tiles/                    # 预切瓦片数据（raster/dem/3dtiles/vector；二进制不入库）
+├─ tiles/                    # 预切瓦片数据（raster/vector；三维数据已取消，二进制不入库）
 ├─ media/                    # 本地演示视频 mp4（不入库）
 ├─ scripts/                  # 构建与部署脚本
 └─ release/                  # 服务端部署包输出（不入库）
