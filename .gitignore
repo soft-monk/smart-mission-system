@@ -1,7 +1,6 @@
 # === Node / 前端 ===
 node_modules/
 frontend/dist/
-shell/dist/
 
 # === Java / 后端 ===
 backend/target/
@@ -21,10 +20,8 @@ tiles/**/*.tiff
 tiles/**/*.pbf
 tiles/**/*.geojson
 
-# === 构建与运行输出 ===
-runtime/*
+# === 部署与运行输出 ===
 release/*
-!runtime/.gitkeep
 !release/.gitkeep
 
 # === IDE / 系统 ===
