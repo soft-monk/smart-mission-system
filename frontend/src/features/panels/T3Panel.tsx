@@ -4,7 +4,7 @@
 import React from 'react'
 import { useStore } from '@/stores/useStore'
 import { Bar, Btn, Dot, Icon, Tag } from '@/components/ui'
-import { BottomBar, FloatCard, NextBtn, Sub, TopBanner } from '@/features/panels/common'
+import { BottomBar, FloatCard, NextBtn, Sub, TelemetryStrip, TopBanner } from '@/features/panels/common'
 import type { LinkEdge } from '@/api/types'
 
 // ---------------------------------------------------------------- 集群总体状态（场景一）
@@ -236,14 +236,16 @@ export const T3Panel: React.FC = () => {
             </div>
           </FloatCard>
 
+          {/* 实时遥测条：数值随 1s 周期遥测跳动（数据饱满感的关键） */}
+          <TelemetryStrip bottom={74} left={12} right={320} />
+
           {/* 场景一：底部推进按钮（需求初稿 T3-1 仅有【更多详情】，但流程需可前进） */}
           <BottomBar>
             <span style={{ fontSize: 12, color: 'var(--text-2)' }}>
               侦察展开中 · 多源数据实时回传前沿指挥节点
             </span>
             <span className="spacer" />
-            <Btn variant="ghost" onClick={() => void gotoTargets()}>刷新目标</Btn>
-            <NextBtn>进入目标识别 »</NextBtn>
+            <Btn variant="ghost" onClick={() => void gotoTargets()}>刷新目标</Btn>            <NextBtn>进入目标识别 »</NextBtn>
           </BottomBar>
         </>
       )}

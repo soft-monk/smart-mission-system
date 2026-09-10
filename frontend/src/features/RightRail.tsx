@@ -4,7 +4,7 @@
 import React, { useState } from 'react'
 import { api } from '@/api/client'
 import { useStore, type TimelineEntry } from '@/stores/useStore'
-import { Bar, Btn, Dot, Empty, Icon, KV, Panel, Ring, Stars, Tag } from '@/components/ui'
+import { Bar, Btn, Dot, Empty, Icon, KV, LiveNum, Panel, Ring, Stars, Tag } from '@/components/ui'
 
 type Tone = 'green' | 'amber' | 'red' | 'cyan' | 'gray'
 
@@ -52,6 +52,69 @@ const UAV_TYPES: { key: string; label: string }[] = [
   { key: 'electronic', label: '电子' },
   { key: 'comm', label: '通信' },
 ]
+
+/**
+ * 实时遥测面板（全阶段常驻）
+ * 把 store 中持续推送的 UAV/链路遥测聚合成跳动指标，让界面「一直在动」。
+ */
+const TelemetryPanel: React.FC = () => {
+  const uavPositions = useStore((s) => s.uavPositions)
+  const linkMetrics = useStore((s) => s.linkMetrics)
+  const list = React.useMemo(() => Object.values(uavPositions), [uavPositions])
+
+  const stats = React.useMemo(() => {
+    if (list.length === 0) return null
+    const avg = (f: (u: (typeof list)[number]) => number) =>
+      list.reduce((a, u) => a + (f(u) || 0), 0) / list.length
+    const byType: Record<string, number> = {}
+    list.forEach((u) => { byType[u.type] = (byType[u.type] ?? 0) + 1 })
+    return {
+      online: list.length,
+      battery: avg((u) => u.battery),
+      alt: avg((u) => u.alt),
+      speed: avg((u) => u.speed),
+      byType,
+    }
+  }, [list])
+
+  return (
+    <Panel hud title="实时遥测" icon="wave">
+      <div className="grid-2" style={{ gap: 6 }}>
+        <MiniStat k="在线无人机" v={stats?.online ?? 0} u="架" tone="var(--cyan)" />
+        <MiniStat
+          k="平均电量" v={stats?.battery ?? 0} u="%"
+          tone={(stats?.battery ?? 100) < 40 ? 'var(--amber)' : 'var(--green)'}
+        />
+        <MiniStat k="平均高度" v={stats?.alt ?? 0} u="m" />
+        <MiniStat k="平均速度" v={stats?.speed ?? 0} u="m/s" digits={1} />
+        <MiniStat k="链路带宽" v={linkMetrics?.bandwidthMbps ?? 0} u="Mbps" tone="var(--cyan)" />
+        <MiniStat k="链路时延" v={linkMetrics?.latencyMs ?? 0} u="ms" tone="var(--cyan)" />
+      </div>
+      {stats && (
+        <div className="row" style={{ gap: 10, marginTop: 7, fontSize: 11 }}>
+          {UAV_TYPES.map((t) => (
+            <span key={t.key} style={{ color: 'var(--text-2)' }}>
+              {t.label} <b className="v-cyan">{stats.byType[t.key] ?? 0}</b>
+            </span>
+          ))}
+        </div>
+      )}
+    </Panel>
+  )
+}
+
+/** 小指标格（带数值跳动高亮） */
+const MiniStat: React.FC<{ k: string; v: number; u?: string; digits?: number; tone?: string }> = ({
+  k, v, u, digits = 0, tone,
+}) => (
+  <div className="stat" style={{ padding: '5px 7px' }}>
+    <div className="k">{k}</div>
+    <div className="v" style={{ fontSize: 14, color: tone }}>
+      <LiveNum value={v} digits={digits} />
+      {u && <span className="u">{u}</span>}
+    </div>
+  </div>
+)
 
 export const RightRail: React.FC = () => {
   const scenarioKey = useStore((s) => s.scenarioKey)
@@ -116,7 +179,6 @@ export const RightRail: React.FC = () => {
       setBusy(false)
     }
   }
-
   return (
     <aside style={{
       width: 300, flex: '0 0 auto', borderLeft: '1px solid var(--panel-border)',
@@ -128,6 +190,9 @@ export const RightRail: React.FC = () => {
         padding: '10px 10px 16px', display: 'flex', flexDirection: 'column', gap: 8,
       }}>
         <VoicePanel timeline={timeline} scenarioName={scenario?.name} missionTaskNo={mission?.task_no} />
+
+        {/* 实时遥测：全阶段常驻，数值随 1s 周期遥测跳动（数据饱满感） */}
+        <TelemetryPanel />
 
         {/* ============================================================ T0 */}
         {phase === 'T0' && (
