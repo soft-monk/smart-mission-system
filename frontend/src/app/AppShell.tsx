@@ -1,11 +1,15 @@
 // AppShell —— 全局框架（契约 §7.2）
 // 顶栏（Logo/系统名/网络/WiFi/电量/时间/头像）+ 左侧 7 项导航 + 中央地图 + 右侧面板 + 底栏状态槽
 // 语音入口两形态：ball（场景一，右下角悬浮球）/ inline（场景二，页面内语音卡）
+//
+// 清屏模式（地图工具条【清屏】）：只保留「左侧导航 + 底部状态栏 + 地图及地图绘制物」，
+// 隐藏顶栏、右侧面板、阶段面板、语音入口、视频浮层、告警浮层、地图工具条；Esc 或右上角按钮退出。
 import React, { useEffect } from 'react'
 import { useStore, PHASE_ORDER, type LeftNavKey } from '@/stores/useStore'
 import { ws } from '@/ws/client'
 import { Btn, Icon, LogoMark } from '@/components/ui'
-import { MapView } from '@/map/MapView'
+import { Compass, MapModeBadge, MapToolbar, MapView, displayModeOf, useMapUiStore } from '@/map'
+import { useMapData } from './useMapData'
 import { VoiceBall, VoiceInlinePanel } from '@/components/Voice'
 import { PhasePanel } from '@/features/PhasePanel'
 import { RightRail } from '@/features/RightRail'
@@ -39,6 +43,25 @@ export const AppShell: React.FC = () => {
   const voiceMode = useStore((s) =>
     s.scenarios.find((x) => x.key === s.scenarioKey)?.voice_mode ?? 'ball')
 
+  // —— 地图模块接线（唯一连接点） ——
+  const mapData = useMapData()
+  const displayMode = displayModeOf(scenarioKey, phase)
+  const setDisplayMode = useMapUiStore((s) => s.setDisplayMode)
+  const clearMode = useMapUiStore((s) => s.clearMode)
+  const setClearMode = useMapUiStore((s) => s.setClearMode)
+
+  useEffect(() => { setDisplayMode(displayMode) }, [displayMode, setDisplayMode])
+
+  // 清屏：Esc 退出（浏览器全屏时先让浏览器处理）
+  useEffect(() => {
+    if (!clearMode) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !document.fullscreenElement) setClearMode(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [clearMode, setClearMode])
+
   useEffect(() => {
     const offStatus = ws.onStatus(setWsStatus)
     const off = ws.on((env) => useStore.getState().applyWs(env))
@@ -51,7 +74,8 @@ export const AppShell: React.FC = () => {
 
   return (
     <div style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', background: 'var(--bg-0)' }}>
-      {/* 顶栏 */}
+      {/* 顶栏（清屏时隐藏） */}
+      {!clearMode && (
       <header style={{
         height: 'var(--topbar-h)', flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: 10,
         padding: '0 18px', borderBottom: '1px solid var(--panel-border)', background: 'rgba(8,16,30,.9)',
@@ -82,10 +106,11 @@ export const AppShell: React.FC = () => {
         <Clock />
         <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'rgba(80,160,255,.22)', border: '1px solid var(--panel-border-strong)' }} />
       </header>
+      )}
 
       {/* 主体 */}
       <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-        {/* 左侧导航 */}
+        {/* 左侧导航（清屏时保留） */}
         <nav style={{
           width: 'var(--nav-w)', flex: '0 0 auto', borderRight: '1px solid var(--panel-border)',
           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '12px 0',
@@ -120,21 +145,36 @@ export const AppShell: React.FC = () => {
           })}
         </nav>
 
-        {/* 中央地图 + 阶段面板浮层 */}
+        {/* 中央地图（地图模块）+ 浮层 */}
         <main style={{ flex: 1, position: 'relative', minWidth: 0 }}>
-          <MapView>
-            <MapToolbar />
-            <MapModeBadge />
-            <PhasePanel />
-            {voiceMode === 'inline' && <VoiceInlinePanel />}
+          <MapView data={mapData}>
+            {!clearMode && <MapToolbar />}
+            {!clearMode && <MapModeBadge mode={displayMode} />}
+            <Compass />
+            {!clearMode && <PhasePanel />}
+            {!clearMode && voiceMode === 'inline' && <VoiceInlinePanel />}
           </MapView>
+
+          {/* 清屏模式下的退出入口（工具条已隐藏，保留一个极简按钮） */}
+          {clearMode && (
+            <button
+              onClick={() => setClearMode(false)}
+              title="退出清屏（Esc）"
+              style={{
+                position: 'absolute', top: 12, right: 66, zIndex: 12, padding: '6px 12px', fontSize: 12,
+                fontFamily: 'inherit', cursor: 'pointer', borderRadius: 6,
+                background: 'rgba(8,16,30,.78)', border: '1px solid var(--panel-border)', color: 'var(--cyan)',
+                backdropFilter: 'blur(6px)',
+              }}
+            >退出清屏 (Esc)</button>
+          )}
         </main>
 
-        {/* 右侧 AI/状态栏 */}
-        <RightRail />
+        {/* 右侧 AI/状态栏（清屏时隐藏） */}
+        {!clearMode && <RightRail />}
       </div>
 
-      {/* 底栏状态条 */}
+      {/* 底栏状态条（清屏时保留） */}
       <footer style={{
         height: 'var(--statusbar-h)', flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: 18,
         padding: '0 18px', borderTop: '1px solid var(--panel-border)', background: 'rgba(8,16,30,.9)',
@@ -156,14 +196,14 @@ export const AppShell: React.FC = () => {
         <span style={{ color: 'var(--text-2)' }}>进度 {progress}%</span>
       </footer>
 
-      {/* 语音悬浮球（场景一） */}
-      {voiceMode === 'ball' && <VoiceBall />}
+      {/* 语音悬浮球（场景一，清屏时隐藏） */}
+      {!clearMode && voiceMode === 'ball' && <VoiceBall />}
 
-      {/* 告警浮层 */}
-      <AlertToasts />
+      {/* 告警浮层（清屏时隐藏） */}
+      {!clearMode && <AlertToasts />}
 
-      {/* 视频面板（T3 起可用，浮层收起态） */}
-      <VideoPanel />
+      {/* 视频面板（清屏时隐藏） */}
+      {!clearMode && <VideoPanel />}
     </div>
   )
 }
@@ -185,72 +225,4 @@ const Clock: React.FC = () => {
     return () => window.clearInterval(id)
   }, [])
   return <span style={{ fontSize: 12.5, color: 'var(--text-1)' }}>{t.toLocaleTimeString('zh-CN', { hour12: false })}</span>
-}
-
-/** 地图左上工具组（契约 §9.1：选择/测距/图层/区域/新建/全屏/标绘；**不含 3D 切换**） */
-const MapToolbar: React.FC = () => {
-  const [active, setActive] = React.useState('select')
-  const tools = [
-    { key: 'select', label: '选择', icon: 'dot' },
-    { key: 'measure', label: '测距', icon: 'crosshair' },
-    { key: 'layer', label: '图层', icon: 'layers' },
-    { key: 'area', label: '区域', icon: 'area' },
-    { key: 'new', label: '新建', icon: 'target' },
-    { key: 'full', label: '全屏', icon: 'eye' },
-  ]
-  return (
-    <div className="row" style={{
-      position: 'absolute', top: 12, left: 12, gap: 6, zIndex: 8,
-    }}>
-      {tools.map((t) => (
-        <button
-          key={t.key}
-          onClick={() => {
-            setActive(t.key)
-            if (t.key === 'full') {
-              if (document.fullscreenElement) void document.exitFullscreen()
-              else void document.documentElement.requestFullscreen().catch(() => undefined)
-            }
-          }}
-          className="panel"
-          style={{
-            padding: '6px 10px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
-            cursor: 'pointer', fontSize: 10.5, fontFamily: 'inherit',
-            color: active === t.key ? 'var(--cyan)' : 'var(--text-1)',
-            borderColor: active === t.key ? 'var(--cyan)' : 'var(--panel-border)',
-          }}
-        >
-          <Icon name={t.icon} size={15} />
-          {t.label}
-        </button>
-      ))}
-    </div>
-  )
-}
-
-/** 显示模式徽标（右上角，随阶段变化） */
-const MapModeBadge: React.FC = () => {
-  const phase = useStore((s) => s.phase)
-  const scenarioKey = useStore((s) => s.scenarioKey)
-  const mode = DISPLAY_MODE[scenarioKey][phase]
-  return (
-    <div className="panel" style={{
-      position: 'absolute', top: 12, right: 58, padding: '7px 14px', fontSize: 12.5, zIndex: 8,
-      display: 'flex', alignItems: 'center', gap: 8,
-    }}>
-      <span style={{ color: 'var(--text-2)' }}>显示模式：</span>
-      <b className="v-cyan">{mode}</b>
-    </div>
-  )
-}
-
-export const DISPLAY_MODE: Record<string, Record<string, string>> = {
-  'scenario-1': {
-    T0: '综合态势', T1: '综合态势', T2: '链路拓扑', T3: '侦察展开',
-    T4: '目标识别', T5: '任务规划', T6: '实时态势', T7: '复核态势',
-  },
-  'scenario-2': {
-    T0: '综合态势', T1: '综合态势', T2: '云边端拓扑', T3: '边缘融合态势',
-    T4: '目标识别', T5: '任务规划', T6: '引导控制', T7: '结果汇总',
-  },
 }

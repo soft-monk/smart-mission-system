@@ -1,11 +1,15 @@
-// MapView —— MapLibre 二维底图容器（契约 §0：仅二维渲染，无 2D/3D 切换）
-// 设计要点（TRD UI-06）：地图走 WebGL canvas，React 只负责 DOM 面板，互不拖累。
-// 动态图层用 MapLibre 原生 source/layer（见 mapLayers.ts），避免双引擎互操作风险。
-import React, { useEffect, useRef } from 'react'
+// 地图模块 · 地图容器（唯一对外渲染入口）
+//
+// 职责边界：只负责"把数据画成地图"——初始化 MapLibre、管理图层、叠加地图级控件
+// （指北针/工具条/显示模式徽标由调用方以 children 传入或直接从本模块引入）。
+// 数据经 props 注入（MapData），模块自身不读应用 store。
+import React, { useEffect, useRef, useState } from 'react'
 import maplibregl, { Map as MlMap } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
-import { useStore } from '@/stores/useStore'
-import { LayerManager } from '@/map/mapLayers'
+import { LayerManager } from './layers/LayerManager'
+import { mapInstance } from './instance'
+import { useMapUiStore } from './store'
+import type { MapData } from './types'
 
 /** 无瓦片时的兜底样式：深色纯底，保证任何环境都能演示 */
 function fallbackStyle(): maplibregl.StyleSpecification {
@@ -20,19 +24,11 @@ function rasterStyle(tileUrl: string, attribution: string): maplibregl.StyleSpec
   return {
     version: 8,
     sources: {
-      base: {
-        type: 'raster',
-        tiles: [tileUrl],
-        tileSize: 256,
-        attribution,
-        maxzoom: 14,
-      },
+      base: { type: 'raster', tiles: [tileUrl], tileSize: 256, attribution, maxzoom: 14 },
     },
     layers: [
       { id: 'bg', type: 'background', paint: { 'background-color': '#050d18' } },
       // 卫星影像 → 压暗 + 去饱和，做成指挥中心深色风格。
-      // 参数经验：brightness-max 低于 0.55 会把影像压成纯黑（影像本身偏暗）；
-      // 这里取「能看清地形纹理、整体明显偏暗」的平衡点。
       // 注意：MapLibre raster 只支持 raster-* 属性，不要写 'background-tint'。
       {
         id: 'base',
@@ -46,28 +42,26 @@ function rasterStyle(tileUrl: string, attribution: string): maplibregl.StyleSpec
           'raster-brightness-max': 0.62,
         },
       },
-      // 冷色调叠加：把中性灰地形统一成青蓝军事风
-      {
-        id: 'base-tint',
-        type: 'background',
-        paint: { 'background-color': 'rgba(6, 26, 52, 0.30)' },
-      },
+      { id: 'base-tint', type: 'background', paint: { 'background-color': 'rgba(6, 26, 52, 0.30)' } },
     ],
   }
 }
 
-export const mapRef: { current: MlMap | null } = { current: null }
+const DEFAULT_CENTER: [number, number] = [116.3974, 39.9093]
+const DEFAULT_ZOOM = 11
 
-export const MapView: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
+export const MapView: React.FC<{ data: MapData; children?: React.ReactNode }> = ({ data, children }) => {
   const hostRef = useRef<HTMLDivElement | null>(null)
-  const [ready, setReady] = React.useState(false)
+  const [ready, setReady] = useState(false)
+  const setViewport = useMapUiStore((s) => s.setViewport)
+  // 初始化只做一次：用挂载时的配置快照
+  const bootRef = useRef<MapData>(data)
 
   useEffect(() => {
     if (!hostRef.current) return
-
-    const cfg = useStore.getState().mapConfig
-    const center: [number, number] = cfg?.center ?? [116.3974, 39.9093]
-    const zoom = cfg?.zoom ?? 11
+    const cfg = bootRef.current.config
+    const center: [number, number] = cfg?.center ?? DEFAULT_CENTER
+    const zoom = cfg?.zoom ?? DEFAULT_ZOOM
 
     const style = cfg?.basemap?.tileUrlTemplate
       ? rasterStyle(cfg.basemap.tileUrlTemplate, cfg.basemap.attribution)
@@ -81,24 +75,30 @@ export const MapView: React.FC<{ children?: React.ReactNode }> = ({ children }) 
       minZoom: cfg?.minZoom ?? 3,
       maxZoom: cfg?.maxZoom ?? 16,
       attributionControl: { compact: true },
-      dragRotate: false,     // 仅二维：禁旋转
+      dragRotate: false,      // 仅二维：禁旋转（指北针因此恒指正北）
       pitchWithRotate: false,
       touchPitch: false,
       maxPitch: 0,
     })
-    mapRef.current = map
+    mapInstance.current = map
 
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right')
     map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: 'metric' }), 'bottom-left')
 
     map.on('load', () => {
       LayerManager.init(map)
+      LayerManager.applyVisibility()   // 恢复用户此前的图层开关
       setReady(true)
     })
 
-    // 瓦片加载失败处理：只统计，不隐藏图层。
-    // 曾经的写法是「任一错误就把 base 图层 visibility 设为 none」，结果一个缺失瓦片
-    // （或其它无关错误）就会把整张底图永久关掉且不恢复 —— 表现为地图全黑但瓦片其实请求成功。
+    const syncViewport = () => {
+      const c = map.getCenter()
+      setViewport({ lng: c.lng, lat: c.lat, zoom: map.getZoom(), bearing: map.getBearing() })
+    }
+    map.on('move', syncViewport)
+    map.on('rotate', syncViewport)
+
+    // 瓦片加载失败只统计，不隐藏图层（避免一个缺失瓦片把整张底图关掉）
     let tileFailures = 0
     map.on('error', (e) => {
       const msg = String((e as { error?: { message?: string } })?.error?.message ?? '')
@@ -112,67 +112,44 @@ export const MapView: React.FC<{ children?: React.ReactNode }> = ({ children }) 
 
     return () => {
       map.remove()
-      mapRef.current = null
+      mapInstance.current = null
       setReady(false)
     }
-  }, [])
+  }, [setViewport])
 
-  // 场景/任务切换时平滑移动视角
-  const mapConfig = useStore((s) => s.mapConfig)
+  // 场景/任务切换 → 平滑移动视角
+  const config = data.config
   useEffect(() => {
-    const map = mapRef.current
-    if (!map || !mapConfig) return
-    const [lng, lat] = mapConfig.center
-    map.easeTo({ center: [lng, lat], zoom: mapConfig.zoom, duration: 600 })
-  }, [mapConfig])
+    const map = mapInstance.current
+    if (!map || !config) return
+    const [lng, lat] = config.center
+    map.easeTo({ center: [lng, lat], zoom: config.zoom, duration: 600 })
+  }, [config])
 
   return (
     <div style={{ position: 'absolute', inset: 0 }}>
       <div ref={hostRef} style={{ position: 'absolute', inset: 0 }} />
-      {/* 指挥中心观感：暗角 + 极淡坐标网格（不拦截鼠标） */}
       <div className="map-vignette" />
-      {ready && <LayerSync />}
+      {ready && <LayerSync data={data} />}
       {children}
     </div>
   )
 }
 
-/** 把 store 中的数据同步到地图图层（遥测/目标/链路/区域/轨迹） */
-const LayerSync: React.FC = () => {
-  const phase = useStore((s) => s.phase)
-  const scenarioKey = useStore((s) => s.scenarioKey)
-  const targets = useStore((s) => s.targets)
-  const edges = useStore((s) => s.linkEdges)
-  const groups = useStore((s) => s.groups)
-  const uavPositions = useStore((s) => s.uavPositions)
-  const selectedTargetId = useStore((s) => s.selectedTargetId)
-  const trackPoints = useStore((s) => s.trackPoints)
-  const linkTopology = useStore((s) => s.linkTopology)
+/** 把业务数据同步到地图图层（模块内部实现，数据全部来自 props） */
+const LayerSync: React.FC<{ data: MapData }> = ({ data }) => {
+  const { scenarioKey, phase, targets, selectedTargetId, groups, uavs, edges, topology, track } = data
 
   useEffect(() => {
     LayerManager.setScenario(scenarioKey)
     LayerManager.setPhase(phase)
   }, [scenarioKey, phase])
 
-  useEffect(() => {
-    LayerManager.setLinks(edges, linkTopology?.nodes ?? [])
-  }, [edges, linkTopology])
-
-  useEffect(() => {
-    LayerManager.setTargets(targets, selectedTargetId)
-  }, [targets, selectedTargetId])
-
-  useEffect(() => {
-    LayerManager.setGroups(groups)
-  }, [groups])
-
-  useEffect(() => {
-    LayerManager.setUavs(Object.values(uavPositions))
-  }, [uavPositions])
-
-  useEffect(() => {
-    LayerManager.setTrack(trackPoints)
-  }, [trackPoints])
+  useEffect(() => { LayerManager.setLinks(edges, topology?.nodes ?? []) }, [edges, topology])
+  useEffect(() => { LayerManager.setTargets(targets, selectedTargetId ?? undefined) }, [targets, selectedTargetId])
+  useEffect(() => { LayerManager.setGroups(groups) }, [groups])
+  useEffect(() => { LayerManager.setUavs(uavs) }, [uavs])
+  useEffect(() => { LayerManager.setTrack(track) }, [track])
 
   return null
 }

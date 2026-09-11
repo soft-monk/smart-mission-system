@@ -1,7 +1,8 @@
-// mapLayers.ts —— MapLibre 原生动态图层管理（契约 §9.1）
+// LayerManager.ts —— MapLibre 原生动态图层管理（地图模块内部实现）
 //
 // 图层：区域多边形 / 链路 / 集群 / 目标 / 无人机 / 扫描热点 / 轨迹
 // 增量原则：source.setData() 而非重建图层（TRD 性能设计要点）。
+// 分组显隐：setGroupVisible()，满足 MAP-04「多图层可独立开关」。
 import type { Map as MlMap } from 'maplibre-gl'
 import type { Group, LinkEdge, Phase, ScenarioKey, Target, TargetTrackPoint, UavPosEvent } from '@/api/types'
 
@@ -38,6 +39,35 @@ const LYR = {
 
 const emptyFC = (): GeoJSON.FeatureCollection => ({ type: 'FeatureCollection', features: [] })
 
+/** 可独立开关的图层分组（对外公开，供图层开关面板使用） */
+export type LayerGroup = 'area' | 'pulse' | 'scan' | 'link' | 'group' | 'track' | 'trail' | 'target' | 'uav'
+
+export const LAYER_GROUP_LABELS: Record<LayerGroup, string> = {
+  area: '任务区域',
+  group: '集群编组',
+  uav: '无人机/航迹',
+  target: '目标/锁定框',
+  link: '数据链路',
+  scan: '扫描覆盖',
+  track: '目标轨迹',
+  trail: '飞行尾迹',
+  pulse: '脉冲标记',
+}
+
+const GROUP_LAYERS: Record<LayerGroup, string[]> = {
+  area: [LYR.areaFill, LYR.areaLine],
+  pulse: [LYR.pulse],
+  scan: [LYR.scan],
+  link: [LYR.linkGlow, LYR.link],
+  group: [LYR.group, LYR.groupLabel],
+  track: [LYR.track],
+  trail: [LYR.trail],
+  target: [LYR.targetGlow, LYR.target, LYR.targetLabel],
+  uav: [LYR.uavGlow, LYR.uav, LYR.uavLabel],
+}
+
+export const ALL_LAYER_GROUPS = Object.keys(GROUP_LAYERS) as LayerGroup[]
+
 // 航迹历史（用于尾迹）
 const trailHistory: Record<string, [number, number][]> = {}
 
@@ -47,6 +77,35 @@ export class LayerManager {
   private static phase: Phase = 'T0'
   private static pulseTimer: number | null = null
   private static pulseSeeds: { lng: number; lat: number; color: string }[] = []
+  /** 被用户关掉的图层分组（跨 init 保留，重新加载样式后由 applyVisibility 恢复） */
+  private static hidden = new Set<LayerGroup>()
+
+  /** 图层分组显隐（MAP-04：多图层可独立开关） */
+  static setGroupVisible(group: LayerGroup, visible: boolean) {
+    if (visible) this.hidden.delete(group)
+    else this.hidden.add(group)
+    this.applyVisibility()
+  }
+
+  static isGroupVisible(group: LayerGroup) {
+    return !this.hidden.has(group)
+  }
+
+  static hiddenGroups(): LayerGroup[] {
+    return [...this.hidden]
+  }
+
+  /** 把当前显隐状态应用到已存在的图层（幂等，可在 init 后调用） */
+  static applyVisibility() {
+    const map = this.map
+    if (!map) return
+    for (const g of ALL_LAYER_GROUPS) {
+      const vis = this.hidden.has(g) ? 'none' : 'visible'
+      for (const id of GROUP_LAYERS[g]) {
+        if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis)
+      }
+    }
+  }
 
   static init(map: MlMap) {
     this.map = map
