@@ -102,3 +102,14 @@ interface MapData {
 - 瓦片路径 `/tiles/raster/{z}/{x}/{y}.jpg`，缺瓦片回落纯色底（`fallback: solid`）
 - 图层数据一律 `source.setData()` 增量更新，不重建图层（性能设计要点 UI-06）
 - 地图渲染走 WebGL canvas，React 只负责 DOM 浮层，避免互相拖累帧率
+
+## 9. 模块级开关（`options.ts`）
+
+| 选项 | 默认 | 说明 |
+|---|---|---|
+| `showAttribution` | `false` | 是否在地图右下角显示底图版权署名（Esri / Maxar / Earthstar Geographics） |
+| `compactAttribution` | `true` | 显示署名时的紧凑模式（悬停展开） |
+
+> ⚠️ **合规提醒**：Esri World Imagery 条款通常要求保留署名。当前默认隐藏（按项目要求保持界面整洁），
+> **合规责任由使用方承担**；需要恢复时把 `options.ts` 里的 `showAttribution` 改回 `true` 即可，
+> 无需改动其它文件（关闭时同时不写入 `source.attribution`，避免残留署名文本）。

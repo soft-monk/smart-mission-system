@@ -8,6 +8,7 @@ import maplibregl, { Map as MlMap } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { LayerManager } from './layers/LayerManager'
 import { mapInstance } from './instance'
+import { MAP_OPTIONS } from './options'
 import { useMapUiStore } from './store'
 import type { MapData } from './types'
 
@@ -24,7 +25,15 @@ function rasterStyle(tileUrl: string, attribution: string): maplibregl.StyleSpec
   return {
     version: 8,
     sources: {
-      base: { type: 'raster', tiles: [tileUrl], tileSize: 256, attribution, maxzoom: 14 },
+      // 署名是否交给 MapLibre 由 MAP_OPTIONS.showAttribution 决定：
+      // 关闭时不写入 source.attribution，避免控件隐藏但样式里仍残留署名文本。
+      base: {
+        type: 'raster',
+        tiles: [tileUrl],
+        tileSize: 256,
+        maxzoom: 14,
+        ...(MAP_OPTIONS.showAttribution ? { attribution } : {}),
+      },
     },
     layers: [
       { id: 'bg', type: 'background', paint: { 'background-color': '#050d18' } },
@@ -74,7 +83,8 @@ export const MapView: React.FC<{ data: MapData; children?: React.ReactNode }> = 
       zoom,
       minZoom: cfg?.minZoom ?? 3,
       maxZoom: cfg?.maxZoom ?? 16,
-      attributionControl: { compact: true },
+      // 版权署名开关见 options.ts（默认隐藏；合规责任由使用方承担）
+      attributionControl: MAP_OPTIONS.showAttribution ? { compact: MAP_OPTIONS.compactAttribution } : false,
       dragRotate: false,      // 仅二维：禁旋转（指北针因此恒指正北）
       pitchWithRotate: false,
       touchPitch: false,
