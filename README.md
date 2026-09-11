@@ -44,11 +44,13 @@ mapApp/
 ```bat
 scripts\doctor.bat        :: 1) 环境体检：逐项 OK/MISS + 修复指引
 scripts\setup_env.bat     :: 2) 一次性：建 ai\.venv + 装 Python 依赖 + npm install
-scripts\fetch_tiles.bat   :: 3) 首次抓底图瓦片（约 1.3 万张，幂等可续跑；停止：scripts\stop_tiles.bat）
+:: 3) 安装底图瓦片（二选一）
+scripts\install_tiles.bat https://github.com/soft-monk/smart-mission-system/releases/download/tiles-v1/mapapp-tiles-raster.zip
+::    或按需从源头抓：scripts\fetch_tiles.bat   （幂等续跑；停止：scripts\stop_tiles.bat）
 scripts\build_all.bat     :: 4) 构建：前端 -> backend\static，C++ -> backend\bin\Release\mapapp.exe
 scripts\start_all.bat     :: 5) 启动：AI 桥 + 后端
 ::    浏览器访问  http://127.0.0.1:8080/   或   http://<本机IP>:8080/
-scripts\stop_all.bat      ::    停止
+scripts\stop_all.bat      ::    停止（tiles=只停抓取，all=服务+抓取）
 ```
 
 **首次构建耗时**：vcpkg 要从源码编译 Drogon 及其依赖（openssl、trantor、sqlite3 等），

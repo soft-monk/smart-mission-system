@@ -23,6 +23,7 @@ if "%~1"=="" (
   echo.
   echo        fetch from source instead :  scripts\fetch_tiles.bat
   echo        local package ^(if built^) :  release\mapapp-tiles-raster.zip
+  echo        published package         :  https://github.com/soft-monk/smart-mission-system/releases/download/tiles-v1/mapapp-tiles-raster.zip
   exit /b 1
 )
 
