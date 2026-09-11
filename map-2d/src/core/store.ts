@@ -1,6 +1,6 @@
 // 地图模块 · 模块内 UI 状态（自持 store，不与应用业务 store 混用）
 import { create } from 'zustand'
-import { ALL_LAYER_GROUPS, LayerManager, type LayerGroup } from './layers/LayerManager'
+import { ALL_LAYER_GROUPS, LayerManager, type LayerGroup } from '../render/LayerManager'
 import type { MapToolKey, MapViewport } from './types'
 
 export interface MapUiState {

@@ -12,8 +12,10 @@ mapApp/
 │  ├─ 03-参考/               # 术语与工具速查、开发环境与资源下载清单
 │  └─ 04-设计/               # 概要设计文档（架构级：怎么做）
 ├─ frontend/                 # React + TypeScript（Vite，浏览器渲染）
-│  └─ src/{api,ws,map,stores,app}
-│     └─ map/                # ★ 二维地图独立模块（公开入口 @/map，说明见 map/README.md）
+│  └─ src/{api,ws,stores,app}
+├─ map-2d/                   # ★ 二维地图绘制模块（独立可运行 / 可整包交付 / 可独立子仓）
+│  ├─ src/{core,primitives,render,ui,standalone}
+│  └─ README.md              # 模块说明：API、绘制能力、独立启动、交付方式
 ├─ backend/                  # C++ 服务端（Drogon）
 │  ├─ src/                   # C++ 源码
 │  └─ static/                # 前端产物落点（构建期生成，不入库）

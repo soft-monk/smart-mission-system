@@ -6,11 +6,12 @@
 import React, { useEffect, useRef, useState } from 'react'
 import maplibregl, { Map as MlMap } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
-import { LayerManager } from './layers/LayerManager'
-import { mapInstance } from './instance'
-import { MAP_OPTIONS } from './options'
-import { useMapUiStore } from './store'
-import type { MapData } from './types'
+import { LayerManager } from '../render/LayerManager'
+import { MapDraw } from '../primitives/api'
+import { mapInstance } from '../core/instance'
+import { MAP_OPTIONS } from '../core/options'
+import { useMapUiStore } from '../core/store'
+import type { MapConfigData, MapData } from '../core/types'
 
 /** 无瓦片时的兜底样式：深色纯底，保证任何环境都能演示 */
 function fallbackStyle(): maplibregl.StyleSpecification {
@@ -59,6 +60,14 @@ function rasterStyle(tileUrl: string, attribution: string): maplibregl.StyleSpec
 const DEFAULT_CENTER: [number, number] = [116.3974, 39.9093]
 const DEFAULT_ZOOM = 11
 
+/** 底图样式选择：在线样式 URL > 本地栅格瓦片 > 纯色兜底 */
+function buildStyle(cfg: MapConfigData | null): maplibregl.StyleSpecification | string {
+  const b = cfg?.basemap
+  if (b?.styleUrl) return b.styleUrl
+  if (b?.tileUrlTemplate) return rasterStyle(b.tileUrlTemplate, b.attribution)
+  return fallbackStyle()
+}
+
 export const MapView: React.FC<{ data: MapData; children?: React.ReactNode }> = ({ data, children }) => {
   const hostRef = useRef<HTMLDivElement | null>(null)
   const [ready, setReady] = useState(false)
@@ -72,9 +81,7 @@ export const MapView: React.FC<{ data: MapData; children?: React.ReactNode }> = 
     const center: [number, number] = cfg?.center ?? DEFAULT_CENTER
     const zoom = cfg?.zoom ?? DEFAULT_ZOOM
 
-    const style = cfg?.basemap?.tileUrlTemplate
-      ? rasterStyle(cfg.basemap.tileUrlTemplate, cfg.basemap.attribution)
-      : fallbackStyle()
+    const style = buildStyle(cfg)
 
     const map = new maplibregl.Map({
       container: hostRef.current,
@@ -135,6 +142,25 @@ export const MapView: React.FC<{ data: MapData; children?: React.ReactNode }> = 
     const [lng, lat] = config.center
     map.easeTo({ center: [lng, lat], zoom: config.zoom, duration: 600 })
   }, [config])
+
+  // 底图切换（独立宿主可在运行中切换"本地瓦片 ↔ 在线样式"）
+  const basemapKey = `${config?.basemap?.styleUrl ?? ''}|${config?.basemap?.tileUrlTemplate ?? ''}`
+  const firstBasemapRef = useRef(true)
+  useEffect(() => {
+    const map = mapInstance.current
+    if (!map) return
+    if (firstBasemapRef.current) { firstBasemapRef.current = false; return }
+    map.setStyle(buildStyle(config) as never)
+    const onStyled = () => {
+      // setStyle 会清空所有 source/layer，需要重建并重放绘图 API 的图元
+      if (!map.getSource('src-area')) {
+        LayerManager.init(map)
+        LayerManager.applyVisibility()
+      }
+      MapDraw.render()
+    }
+    map.once('styledata', onStyled)
+  }, [basemapKey])
 
   return (
     <div style={{ position: 'absolute', inset: 0 }}>

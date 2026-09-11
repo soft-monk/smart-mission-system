@@ -1,6 +1,7 @@
 # === Node / 前端 ===
 node_modules/
 frontend/dist/
+map-2d/dist/
 backend/static/*
 !backend/static/.gitkeep
 

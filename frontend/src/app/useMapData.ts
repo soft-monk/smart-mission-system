@@ -4,7 +4,7 @@
 // 都只改这里；frontend/src/map/ 内部零改动（保持模块可独立移植）。
 import { useMemo } from 'react'
 import { useStore } from '@/stores/useStore'
-import type { MapData } from '@/map'
+import type { MapData } from '@map2d'
 
 export function useMapData(): MapData {
   const config = useStore((s) => s.mapConfig)

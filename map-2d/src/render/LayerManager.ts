@@ -4,7 +4,7 @@
 // 增量原则：source.setData() 而非重建图层（TRD 性能设计要点）。
 // 分组显隐：setGroupVisible()，满足 MAP-04「多图层可独立开关」。
 import type { Map as MlMap } from 'maplibre-gl'
-import type { Group, LinkEdge, Phase, ScenarioKey, Target, TargetTrackPoint, UavPosEvent } from '@/api/types'
+import type { Group, LinkEdge, Phase, ScenarioKey, Target, TargetTrackPoint, UavPosEvent } from '../core/types'
 
 const SRC = {
   area: 'src-area',
@@ -16,6 +16,7 @@ const SRC = {
   track: 'src-track',
   trail: 'src-trail',
   pulse: 'src-pulse',
+  mark: 'src-mark',
 }
 
 const LYR = {
@@ -35,12 +36,14 @@ const LYR = {
   track: 'lyr-track',
   trail: 'lyr-trail',
   pulse: 'lyr-pulse',
+  mark: 'lyr-mark',
+  markLabel: 'lyr-mark-label',
 }
 
 const emptyFC = (): GeoJSON.FeatureCollection => ({ type: 'FeatureCollection', features: [] })
 
 /** 可独立开关的图层分组（对外公开，供图层开关面板使用） */
-export type LayerGroup = 'area' | 'pulse' | 'scan' | 'link' | 'group' | 'track' | 'trail' | 'target' | 'uav'
+export type LayerGroup = 'area' | 'pulse' | 'scan' | 'link' | 'group' | 'track' | 'trail' | 'target' | 'uav' | 'mark'
 
 export const LAYER_GROUP_LABELS: Record<LayerGroup, string> = {
   area: '任务区域',
@@ -52,6 +55,7 @@ export const LAYER_GROUP_LABELS: Record<LayerGroup, string> = {
   track: '目标轨迹',
   trail: '飞行尾迹',
   pulse: '脉冲标记',
+  mark: '标注/标记',
 }
 
 const GROUP_LAYERS: Record<LayerGroup, string[]> = {
@@ -64,6 +68,7 @@ const GROUP_LAYERS: Record<LayerGroup, string[]> = {
   trail: [LYR.trail],
   target: [LYR.targetGlow, LYR.target, LYR.targetLabel],
   uav: [LYR.uavGlow, LYR.uav, LYR.uavLabel],
+  mark: [LYR.mark, LYR.markLabel],
 }
 
 export const ALL_LAYER_GROUPS = Object.keys(GROUP_LAYERS) as LayerGroup[]
@@ -121,6 +126,7 @@ export class LayerManager {
     add(SRC.track, emptyFC())
     add(SRC.trail, emptyFC())
     add(SRC.pulse, emptyFC())
+    add(SRC.mark, emptyFC())
 
     // ---- 区域多边形（任务分区） ----
     map.addLayer({
@@ -271,6 +277,28 @@ export class LayerManager {
       paint: { 'text-color': '#9fb3d1', 'text-halo-color': 'rgba(5,10,20,.85)', 'text-halo-width': 1.6 },
     })
 
+    // ---- 通用标注 / 标记（绘图 API 驱动的自由图元） ----
+    map.addLayer({
+      id: LYR.mark, type: 'circle', source: SRC.mark,
+      paint: {
+        'circle-radius': ['coalesce', ['get', 'r'], 4],
+        'circle-color': ['coalesce', ['get', 'color'], '#22d3ee'],
+        'circle-stroke-color': 'rgba(232,241,255,.75)',
+        'circle-stroke-width': 1,
+      },
+    })
+    map.addLayer({
+      id: LYR.markLabel, type: 'symbol', source: SRC.mark,
+      layout: {
+        'text-field': ['coalesce', ['get', 'text'], ''],
+        'text-size': ['coalesce', ['get', 'size'], 11],
+        'text-offset': [0, -1.3],
+        'text-anchor': 'bottom',
+        'text-allow-overlap': false,
+      },
+      paint: { 'text-color': ['coalesce', ['get', 'color'], '#cfe3f5'], 'text-halo-color': 'rgba(5,10,20,.85)', 'text-halo-width': 1.8 },
+    })
+
     this.startPulse()
   }
 
@@ -388,7 +416,7 @@ export class LayerManager {
   }
 
   // ---------------------------------------------------------------- 数据
-  static setLinks(edges: LinkEdge[], nodes: { id: string; name: string; kind: string }[]) {
+  static setLinks(edges: LinkEdge[], nodes: { id: string; name: string; kind?: string }[]) {
     const c: [number, number] = this.scenario === 'scenario-2' ? [121.4737, 31.2304] : [116.3974, 39.9093]
     const byName = new Map<string, [number, number]>()
     let groupIdx = 0
@@ -401,7 +429,7 @@ export class LayerManager {
         byName.set(n.name, [c[0] + 0.056 * Math.cos(a), c[1] + 0.040 * Math.sin(a)])
       }
     })
-    const colorOf = (st: string) => (st === 'green' ? '#22c55e' : st === 'yellow' ? '#f59e0b' : '#ef4444')
+    const colorOf = (st?: string) => (st === 'yellow' ? '#f59e0b' : st === 'red' ? '#ef4444' : '#22c55e')
     const feats: GeoJSON.Feature[] = []
     edges.forEach((e) => {
       const a = byName.get(e.from_node)
@@ -430,7 +458,7 @@ export class LayerManager {
   }
 
   static setTargets(targets: Target[], selectedId?: string) {
-    const colorOf = (st: string) => (st === 'red' ? '#ef4444' : st === 'yellow' ? '#f59e0b' : '#8b93a7')
+    const colorOf = (st?: string) => (st === 'red' ? '#ef4444' : st === 'yellow' ? '#f59e0b' : '#8b93a7')
     const feats: GeoJSON.Feature[] = targets.map((t) => ({
       type: 'Feature',
       properties: {
@@ -459,7 +487,7 @@ export class LayerManager {
     }
     const feats: GeoJSON.Feature[] = list.map((u) => ({
       type: 'Feature',
-      properties: { label: u.groupId ?? u.type, color: colorOf[u.type] ?? '#22d3ee', battery: u.battery },
+      properties: { label: u.groupId ?? u.type, color: colorOf[u.type ?? ''] ?? '#22d3ee', battery: u.battery },
       geometry: { type: 'Point', coordinates: [u.lng, u.lat] },
     }))
     const src = this.map?.getSource(SRC.uav) as maplibregl.GeoJSONSource | undefined
@@ -513,4 +541,79 @@ export class LayerManager {
   static focus(lng: number, lat: number, zoom = 13) {
     this.map?.easeTo({ center: [lng, lat], zoom, duration: 600 })
   }
+
+  // ---------------------------------------------------------------- 自由图元（绘图 API 驱动）
+  /** 直接写入任务区域要素（外部数据驱动；会覆盖内置场景预设区域） */
+  static setAreaFeatures(fc: GeoJSON.FeatureCollection) {
+    const src = this.map?.getSource(SRC.area) as maplibregl.GeoJSONSource | undefined
+    src?.setData(fc as never)
+  }
+
+  /** 直接写入扫描覆盖要素 */
+  static setScanFeatures(fc: GeoJSON.FeatureCollection) {
+    const src = this.map?.getSource(SRC.scan) as maplibregl.GeoJSONSource | undefined
+    src?.setData(fc as never)
+  }
+
+  /** 设置脉冲环种子（公开版；供绘图 API 使用） */
+  static setPulseItems(seeds: { lng: number; lat: number; color: string; radiusKm?: number }[]) {
+    this.setPulseSeeds(seeds.map((s) => ({ lng: s.lng, lat: s.lat, color: s.color })))
+  }
+
+  /** 自由标注 / 标记（点 + 文本） */
+  static setMarkers(fc: GeoJSON.FeatureCollection) {
+    const src = this.map?.getSource(SRC.mark) as maplibregl.GeoJSONSource | undefined
+    src?.setData(fc as never)
+  }
+
+  // ---- 坐标显式的自由图元写入（绘图 API 用；与上面的"演示语义"方法解耦） ----
+  /** 自由链路（LineString，属性：color/state/name） */
+  static setLinkFeatures(fc: GeoJSON.FeatureCollection) {
+    const src = this.map?.getSource(SRC.link) as maplibregl.GeoJSONSource | undefined
+    src?.setData(fc as never)
+  }
+
+  /** 自由集群点（Point，属性：name/color） */
+  static setGroupFeatures(fc: GeoJSON.FeatureCollection) {
+    const src = this.map?.getSource(SRC.group) as maplibregl.GeoJSONSource | undefined
+    src?.setData(fc as never)
+  }
+
+  /** 自由目标点（Point，属性：id/label/color/selected/threat） */
+  static setTargetFeatures(fc: GeoJSON.FeatureCollection) {
+    const src = this.map?.getSource(SRC.target) as maplibregl.GeoJSONSource | undefined
+    src?.setData(fc as never)
+  }
+
+  /** 自由无人机点（Point，属性：label/color） */
+  static setUavFeatures(fc: GeoJSON.FeatureCollection) {
+    const src = this.map?.getSource(SRC.uav) as maplibregl.GeoJSONSource | undefined
+    src?.setData(fc as never)
+  }
+
+  /** 自由轨迹（多条 LineString，属性：color/dashed） */
+  static setTrackFeatures(fc: GeoJSON.FeatureCollection) {
+    const src = this.map?.getSource(SRC.track) as maplibregl.GeoJSONSource | undefined
+    src?.setData(fc as never)
+  }
+
+  /** 自由的脉冲环种子（绘图 API 用） */
+  static setPulseSeedsPublic(seeds: { lng: number; lat: number; color: string }[]) {
+    this.setPulseSeeds(seeds)
+  }
+
+  /** 清空全部动态图层（不影响底图） */
+  static clearAll() {
+    for (const id of Object.values(SRC)) {
+      const src = this.map?.getSource(id) as maplibregl.GeoJSONSource | undefined
+      src?.setData({ type: 'FeatureCollection', features: [] } as never)
+    }
+    this.pulseSeeds = []
+    deleteTrailHistory()
+  }
+}
+
+/** 清空航迹历史（clearAll 用） */
+function deleteTrailHistory() {
+  for (const k of Object.keys(trailHistory)) delete trailHistory[k]
 }

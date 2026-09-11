@@ -5,8 +5,8 @@
 //   2) 自绘可随 bearing 旋转、可定制配色，且不占用地图控件位。
 // 行为：随地图 bearing 反向旋转，始终保持指向正北；点击可复位视角朝向。
 import React, { useEffect, useState } from 'react'
-import { mapInstance } from './instance'
-import { useMapUiStore } from './store'
+import { mapInstance } from '../core/instance'
+import { useMapUiStore } from '../core/store'
 
 export const Compass: React.FC<{ size?: number }> = ({ size = 44 }) => {
   const [bearing, setBearing] = useState(0)

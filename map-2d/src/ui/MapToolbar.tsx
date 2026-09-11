@@ -5,9 +5,10 @@
 //   - 测距 / 区域 / 新建 / 标绘：界面占位（disabled，状态见《地图相关需求专篇》CAND-MAP-02）
 // 设计：模块自带内联图标与样式，不依赖应用的 UI 组件库，便于整模块移植。
 import React from 'react'
-import { LAYER_GROUP_LABELS, LayerManager } from './layers/LayerManager'
-import { LAYER_GROUPS, useMapUiStore } from './store'
-import type { MapToolKey } from './types'
+import { LayerManager } from '../render/LayerManager'
+import { useMapUiStore } from '../core/store'
+import { LayerPanel } from './LayerPanel'
+import type { MapToolKey } from '../core/types'
 
 const TOOLS: { key: MapToolKey; label: string; ready: boolean; hint?: string }[] = [
   { key: 'select', label: '选择', ready: true },
@@ -36,7 +37,7 @@ const Glyph: React.FC<{ k: MapToolKey }> = ({ k }) => {
 }
 
 export const MapToolbar: React.FC = () => {
-  const { activeTool, setActiveTool, layersOpen, toggleLayersPanel, setLayersPanel, clearMode, toggleClearMode, hiddenGroups, toggleGroup } = useMapUiStore()
+  const { activeTool, setActiveTool, layersOpen, toggleLayersPanel, setLayersPanel, clearMode, toggleClearMode } = useMapUiStore()
 
   const onTool = (key: MapToolKey) => {
     setActiveTool(key)
@@ -79,32 +80,7 @@ export const MapToolbar: React.FC = () => {
         })}
       </div>
 
-      {layersOpen && !clearMode && (
-        <div style={{
-          position: 'absolute', top: 74, left: 12, zIndex: 9, width: 176, padding: '10px 12px',
-          background: 'rgba(8,16,30,.92)', border: '1px solid var(--panel-border, #1d3a5c)',
-          borderRadius: 8, backdropFilter: 'blur(8px)', fontSize: 12,
-        }}>
-          <div style={{ marginBottom: 6, color: 'var(--text-2, #8fb0cc)' }}>图层开关</div>
-          {LAYER_GROUPS.map((g) => {
-            const on = !hiddenGroups.includes(g)
-            return (
-              <label key={g} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0', cursor: 'pointer' }}>
-                <input type="checkbox" checked={on} onChange={() => toggleGroup(g)} />
-                <span style={{ color: on ? 'var(--text-1, #cfe3f5)' : 'var(--text-2, #8fb0cc)' }}>{LAYER_GROUP_LABELS[g]}</span>
-              </label>
-            )
-          })}
-          <button
-            onClick={() => { LayerManager.hiddenGroups().forEach((g) => LayerManager.setGroupVisible(g, true)); useMapUiStore.setState({ hiddenGroups: [] }) }}
-            style={{
-              marginTop: 6, width: '100%', padding: '4px 0', fontSize: 11, fontFamily: 'inherit', cursor: 'pointer',
-              background: 'transparent', color: 'var(--cyan, #22d3ee)',
-              border: '1px solid var(--panel-border, #1d3a5c)', borderRadius: 6,
-            }}
-          >全部显示</button>
-        </div>
-      )}
+      {layersOpen && !clearMode && <LayerPanel />}
     </>
   )
 }
