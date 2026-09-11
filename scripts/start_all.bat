@@ -2,10 +2,11 @@
 REM ============================================================================
 REM  mapApp - start AI bridge + C++ backend
 REM  Browsers:  http://127.0.0.1:<HTTP_PORT>/   and   http://<lan-ip>:<HTTP_PORT>/
-REM  Stop with: scripts\stop_all.bat
+REM  Stop with: scripts\stop_all.bat   (safe mode: only kills mapapp/python in
+REM                                     this repo, verified by image + path)
 REM
-REM  Both services are launched through their own wrapper scripts so that the
-REM  console code page (chcp 65001) and runtime dirs are set consistently.
+REM  This script NEVER kills anything. If a port is already taken it reports the
+REM  owner and exits, so you can decide what to do.
 REM ============================================================================
 setlocal EnableExtensions
 call "%~dp0env.bat"
@@ -17,6 +18,11 @@ if not exist "%SRV%" (
   echo        run scripts\build_all.bat first ^(see scripts\doctor.bat^)
   exit /b 1
 )
+
+call :check_port %MAPAPP_HTTP_PORT% "C++ backend"
+if errorlevel 1 exit /b 1
+call :check_port %MAPAPP_AI_PORT% "AI bridge"
+if errorlevel 1 exit /b 1
 
 REM runtime dirs used by config.json relative paths
 if not exist "%MAPAPP_ROOT%\backend\data"         mkdir "%MAPAPP_ROOT%\backend\data"
@@ -46,3 +52,19 @@ echo  websocket : ws://127.0.0.1:%MAPAPP_HTTP_PORT%/ws
 echo  logs      : backend\data\server.out.log  /  server.err.log
 echo ============================================================
 exit /b 0
+
+REM ---------------------------------------------------------------------------
+REM  :check_port <port> <label>   -> errorlevel 1 when the port is already taken
+:check_port
+set "CP_PORT=%~1"
+set "CP_LABEL=%~2"
+set "CP_PID="
+for /f "tokens=5" %%p in ('netstat -ano ^| findstr ":%CP_PORT% " ^| findstr "LISTENING"') do set "CP_PID=%%p"
+if not defined CP_PID exit /b 0
+set "CP_IMG=unknown"
+for /f "tokens=1 delims=," %%i in ('tasklist /FI "PID eq %CP_PID%" /FO CSV /NH 2^>nul') do set "CP_IMG=%%~i"
+echo [FAIL] port %CP_PORT% for %CP_LABEL% is already in use by PID %CP_PID% ^(%CP_IMG%^)
+echo        - leftover mapapp process?   run scripts\stop_all.bat
+echo        - something else?            free the port, or set another one in
+echo                                     scripts\env.local.bat  ^(MAPAPP_HTTP_PORT / MAPAPP_AI_PORT^)
+exit /b 1
