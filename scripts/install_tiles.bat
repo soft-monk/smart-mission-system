@@ -55,5 +55,6 @@ set "N=0"
 for /f %%c in ('dir /b /s "%MAPAPP_ROOT%\tiles\raster\*.jpg" 2^>nul ^| find /c /v ""') do set "N=%%c"
 echo       tiles now: %N% jpg files
 echo.
-echo done. restart the backend so it picks up the new tiles.
+echo done. tiles are served from disk on demand - no backend restart needed
+echo       ^(just refresh the map page in the browser^).
 exit /b 0
