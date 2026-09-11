@@ -19,6 +19,9 @@ ai/.venv/
 __pycache__/
 *.pyc
 
+# === 机器本地环境覆盖（每台机器自己的路径与端口，不入库） ===
+scripts/env.local.bat
+
 # === 瓦片等二进制地理数据（不入库，随部署包分发） ===
 tiles/**/*.png
 tiles/**/*.jpg

@@ -1,12 +1,54 @@
 // Config.cc
 #include "core/Config.h"
 
+#include <cctype>
+#include <cstdlib>
 #include <fstream>
 #include <mutex>
 
 #include <nlohmann/json.hpp>
 
 namespace mapapp {
+
+namespace {
+
+// ---- 环境变量读取helpers：空字符串视为未设置 ------------------------------
+const char* envRaw(const char* name) {
+    const char* v = std::getenv(name);
+    return (v && *v) ? v : nullptr;
+}
+
+void envS(const char* name, std::string& dst) {
+    if (const char* v = envRaw(name)) dst = v;
+}
+
+void envI(const char* name, int& dst) {
+    if (const char* v = envRaw(name)) {
+        try {
+            dst = std::stoi(v);
+        } catch (...) {
+        }
+    }
+}
+
+void envD(const char* name, double& dst) {
+    if (const char* v = envRaw(name)) {
+        try {
+            dst = std::stod(v);
+        } catch (...) {
+        }
+    }
+}
+
+void envB(const char* name, bool& dst) {
+    if (const char* v = envRaw(name)) {
+        std::string s(v);
+        for (auto& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        dst = (s == "1" || s == "true" || s == "yes" || s == "on");
+    }
+}
+
+}  // namespace
 
 Config& Config::instance() {
     static Config cfg;
@@ -68,6 +110,38 @@ bool Config::load(const std::string& path) {
     getI("simIntervalMs", simIntervalMs);
 
     return true;
+}
+
+// 环境变量覆盖（优先级：命令行 > 环境变量 > config.json > 内置默认）
+// 由 scripts\env.bat 统一导出，机器差异写在 scripts\env.local.bat 中。
+void Config::applyEnv() {
+    envS("MAPAPP_LISTEN_ADDR", listenAddr);
+    envI("MAPAPP_HTTP_PORT", listenPort);
+    envI("MAPAPP_THREAD_NUM", threadNum);
+
+    envS("MAPAPP_AI_HOST", aiBridgeHost);
+    envI("MAPAPP_AI_PORT", aiBridgePort);
+
+    envS("MAPAPP_UDP_GROUP", udpGroup);
+    envI("MAPAPP_UDP_PORT", udpPort);
+    envB("MAPAPP_UDP_ENABLED", udpEnabled);
+    envI("MAPAPP_NODE_TIMEOUT_MS", nodeTimeoutMs);
+
+    envS("MAPAPP_STATIC_DIR", staticDir);
+    envS("MAPAPP_TILES_DIR", tilesDir);
+    envS("MAPAPP_MEDIA_DIR", mediaDir);
+    envS("MAPAPP_REPORTS_DIR", reportsDir);
+    envS("MAPAPP_DB_PATH", dbPath);
+    envS("MAPAPP_SCENARIOS_DIR", scenariosDir);
+
+    envD("MAPAPP_MAP_LNG", mapCenterLng);
+    envD("MAPAPP_MAP_LAT", mapCenterLat);
+    envI("MAPAPP_MAP_ZOOM", mapZoom);
+    envI("MAPAPP_MAP_MIN_ZOOM", mapMinZoom);
+    envI("MAPAPP_MAP_MAX_ZOOM", mapMaxZoom);
+
+    envB("MAPAPP_SIM_ENABLED", simEnabled);
+    envI("MAPAPP_SIM_INTERVAL_MS", simIntervalMs);
 }
 
 }  // namespace mapapp

@@ -44,7 +44,13 @@ struct Config {
     int    simIntervalMs = 1000;   // 遥测推送周期
 
     static Config& instance();
+
+    // 读取 config.json（不存在时保留内置默认值，返回 false）
     bool load(const std::string& path);
+
+    // 环境变量覆盖：换机时不改任何文件，只由 scripts\env.bat / env.local.bat 注入
+    // 支持的变量名见 Config.cc::applyEnv()
+    void applyEnv();
 };
 
 }  // namespace mapapp

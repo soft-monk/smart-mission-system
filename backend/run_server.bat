@@ -1,13 +1,22 @@
 @echo off
-REM 启动后端（清掉大小写重复的代理变量，避免子进程环境异常）
-set "HTTP_PROXY="
-set "HTTPS_PROXY="
-set "http_proxy="
-set "https_proxy="
-set "NO_PROXY="
-set "no_proxy="
-set "NODE_USE_ENV_PROXY="
+REM ============================================================================
+REM  Run the backend in the foreground (Ctrl+C to stop), logging to data\.
+REM  Working dir is backend\ because config.json uses relative paths.
+REM ============================================================================
+setlocal EnableExtensions
+chcp 65001 >nul 2>&1
+call "%~dp0..\scripts\env.bat"
 
 cd /d "%~dp0"
-echo [run] starting mapapp.exe (debug ai=%MAPAPP_DEBUG_AI%) ...
-"%~dp0bin\Release\mapapp.exe" > "%~dp0data\server.out.log" 2> "%~dp0data\server.err.log"
+if not exist "data"         mkdir "data"
+if not exist "data\reports" mkdir "data\reports"
+
+if not exist "%~dp0bin\Release\mapapp.exe" (
+  echo [FAIL] backend binary not found: %~dp0bin\Release\mapapp.exe
+  echo        run scripts\build_all.bat or backend\build_release.bat first
+  exit /b 1
+)
+
+echo [run] backend on port %MAPAPP_HTTP_PORT%  (logs: data\server.out.log / server.err.log)
+"%~dp0bin\Release\mapapp.exe" --port %MAPAPP_HTTP_PORT% > "%~dp0data\server.out.log" 2> "%~dp0data\server.err.log"
+exit /b %ERRORLEVEL%

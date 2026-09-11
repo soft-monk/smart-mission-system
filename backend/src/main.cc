@@ -149,7 +149,34 @@ void registerApi() {
 }  // namespace
 
 int main(int argc, char** argv) {
-    const std::string configPath = (argc > 1) ? argv[1] : "config.json";
+    // 参数优先级：命令行 > 环境变量（scripts\env.bat）> config.json > 内置默认
+    std::string configPath = "config.json";
+    int  cliPort = 0;
+    std::string cliHost;
+
+    for (int i = 1; i < argc; ++i) {
+        const std::string a = argv[i];
+        if (a == "--help" || a == "-h") {
+            std::cout << "mapapp backend\n"
+                      << "usage: mapapp [--config <path>] [--host <addr>] [--port <n>]\n"
+                      << "env  : MAPAPP_HTTP_PORT, MAPAPP_LISTEN_ADDR, MAPAPP_AI_PORT, ...\n";
+            return 0;
+        } else if (a == "--config" && i + 1 < argc) {
+            configPath = argv[++i];
+        } else if (a.rfind("--config=", 0) == 0) {
+            configPath = a.substr(9);
+        } else if (a == "--port" && i + 1 < argc) {
+            try { cliPort = std::stoi(argv[++i]); } catch (...) {}
+        } else if (a.rfind("--port=", 0) == 0) {
+            try { cliPort = std::stoi(a.substr(7)); } catch (...) {}
+        } else if (a == "--host" && i + 1 < argc) {
+            cliHost = argv[++i];
+        } else if (a.rfind("--host=", 0) == 0) {
+            cliHost = a.substr(7);
+        } else if (!a.empty() && a[0] != '-') {
+            configPath = a;  // 兼容旧用法：第一个位置参数即配置文件
+        }
+    }
 
     auto& cfg = Config::instance();
     if (cfg.load(configPath)) {
@@ -157,6 +184,9 @@ int main(int argc, char** argv) {
     } else {
         std::cout << "[cfg] " << configPath << " not found, using built-in defaults" << std::endl;
     }
+    cfg.applyEnv();
+    if (cliPort > 0) cfg.listenPort = cliPort;
+    if (!cliHost.empty()) cfg.listenAddr = cliHost;
 
     // 数据库
     auto& db = Database::instance();

@@ -34,46 +34,58 @@ mapApp/
 | 开发环境与资源下载清单 | docs/03-参考/ | 工具链/数据/素材/API 下载地址与验证清单 |
 | AI 协作开发规范与文档体系指南 | docs/02-技术需求/ | Agent 协作开发规范（文档驱动） |
 
-## 快速开始（全量开发版）
+## 快速开始（三步跑通）
+
+在 **cmd**（不是 PowerShell）里，于仓库根目录执行：
 
 ```bat
-:: 1) 一次性构建（前端 + C++ 后端）
-scripts\build_all.bat
-
-:: 2) 启动（AI 桥 + 服务端）
-scripts\start_all.bat
-
-:: 3) 浏览器访问
-::    http://127.0.0.1:8080/
-::    局域网其它终端：http://<本机IP>:8080/
-
-:: 4) 停止
-scripts\stop_all.bat
+scripts\doctor.bat        :: 1) 环境体检：逐项 OK/MISS + 修复指引
+scripts\setup_env.bat     :: 2) 一次性：建 ai\.venv + 装 Python 依赖 + npm install
+scripts\build_all.bat     :: 3) 构建：前端 -> backend\static，C++ -> backend\bin\Release\mapapp.exe
+scripts\start_all.bat     :: 4) 启动：AI 桥 + 后端
+::    浏览器访问  http://127.0.0.1:8080/   或   http://<本机IP>:8080/
+scripts\stop_all.bat      ::    停止
 ```
+
+全新机器若 `doctor.bat` 报 vcpkg 缺失：`scripts\install_vcpkg.bat`（一次性）。
+
+> **为什么必须用 cmd**：Windows 默认执行策略禁止运行 `npm.ps1`，在 PowerShell 里直接敲 `npm` 会报
+> `running scripts is disabled on this system`；批处理调用 `npm.cmd` 不受影响。
+
+**换机 / 多端运行**：所有机器相关差异（工具路径、端口）只写 `scripts\env.local.bat`——
+复制 `scripts\env.local.bat.example` 后按需修改，该文件已被 git 忽略，不干扰其他机器。
+完整的环境变量（宏）清单与故障排查表见 **[docs/05-开发/多端运行与环境配置.md](docs/05-开发/多端运行与环境配置.md)**。
 
 **运行前提**
 
 | 依赖 | 说明 |
 |---|---|
-| VS2022（C++ 桌面开发） | 提供 MSVC 与自带 CMake；路径见 `scripts/build_all.bat` 内 `CMAKE` |
-| vcpkg（`C:\vcpkg`） | 提供 drogon / sqlite3 / nlohmann-json；首次配置会自动安装 |
+| VS2022（C++ 桌面开发） | 提供 MSVC；CMake 由 PATH 或 VS 自带版本自动探测（`vswhere`） |
+| vcpkg | 提供 drogon / sqlite3 / nlohmann-json；缺失时运行 `scripts\install_vcpkg.bat` |
 | Node.js 18+ | 构建前端（`npm install` + `vite build`） |
-| Python 3.11+ | AI 桥；`ai\run_bridge.bat` 会自动建 `.venv` 并装依赖 |
+| Python 3.10+ | AI 桥（优先 3.12/3.11）；`ai\run_bridge.bat` 自动建 venv 并装依赖 |
+| OpenAI API Key | 可选；AI/语音在线能力所需，放环境变量 `OPENAI_API_KEY` |
 
-**端口约定**（可由 `backend/config.json` 与 `ai/config.json` 修改）
+**端口约定**（全部可由 `scripts\env.local.bat` 覆盖，无需改配置文件）
 
-| 服务 | 地址 |
-|---|---|
-| C++ 服务端（HTTP/WS） | `0.0.0.0:8080` |
-| Python AI 桥（仅本机） | `127.0.0.1:8090`，由 C++ 反代 `/api/v1/ai/*` |
-| UDP 组播遥测 | `239.10.10.10:45454`（无外部源时内置模拟器驱动） |
+| 服务 | 默认 | 覆盖变量 |
+|---|---|---|
+| C++ 服务端（HTTP/WS） | `0.0.0.0:8080` | `MAPAPP_HTTP_PORT` / `MAPAPP_LISTEN_ADDR` |
+| Python AI 桥（仅本机） | `127.0.0.1:8090` | `MAPAPP_AI_PORT`（C++ 反代目标同步跟随） |
+| UDP 组播遥测 | `239.10.10.10:45454` | `MAPAPP_UDP_GROUP` / `MAPAPP_UDP_PORT` |
 
-**已知环境坑（已在脚本中规避）**
+优先级：**命令行参数 > 环境变量 > config.json > 内置默认**。
 
-- 若系统/父进程环境同时存在 `NO_PROXY` 与 `no_proxy`，.NET 的环境字典会因大小写不敏感抛
-  “已添加项”，导致 **MSBuild/CL.exe 直接失败**；`scripts\*.bat` 会先清空这些变量再调用编译器。
-- 若 `no_proxy` 中含 `[::1]` 这类写法，`httpx` 建客户端时会抛 `InvalidURL` 使 AI 桥启动失败；
-  桥已改为 `trust_env=False`（不读取代理环境变量），启动不再受此影响。
+**已规避的环境坑（脚本内处理，换机不再复现）**
+
+- **乱码**：所有 `.bat` 输出改为纯 ASCII 英文；C++/Python 进程经 `run_server.bat` / `run_bridge.bat`
+  包装（内部 `chcp 65001`）启动，中文日志正常显示
+- **硬编码路径**：旧脚本写死 `VS2022 Community` 与 `C:/vcpkg`，换机必挂 → 改为 `env.bat` 自动探测，
+  机器差异集中到 `env.local.bat`
+- **重复代理变量**：同时存在 `NO_PROXY` 与 `no_proxy` 时 .NET 环境字典抛"已添加项"，
+  MSBuild/CL.exe 直接失败 → `env.bat` 统一清空
+- **`no_proxy` 含 `[::1]`**：httpx 建客户端抛 `InvalidURL` 使 AI 桥启动失败 → 桥改为 `trust_env=False`
+- **缺少运行目录**：`backend\data`、`data\reports` 不存在导致日志重定向失败 → 启动脚本自动创建
 
 ## 开始
 
@@ -85,8 +97,8 @@ scripts\stop_all.bat
 ## 构建与部署流水线（B/S）
 
 ```
-frontend: pnpm build → 产物复制到 backend/static
-backend:  cmake + vcpkg（drogon/sqlite3/nlohmann-json）→ mapapp.exe
+frontend: npm run build → 产物复制到 backend/static
+backend:  cmake + vcpkg（drogon/sqlite3/nlohmann-json）→ backend/bin/Release/mapapp.exe
 ai:       python -m venv + pip install → FastAPI 桥（仅本机监听）
 部署:     mapapp.exe + static（前端/瓦片/视频）+ data + ai 环境 → 服务端部署包（release/）
 客户端:   浏览器访问 http://<服务端内网IP>:<端口>/，零安装、零升级
