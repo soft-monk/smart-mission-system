@@ -73,6 +73,15 @@ if exist "%MAPAPP_ROOT%\backend\bin\Release\mapapp.exe" (
   echo  [INFO] backend not built yet - run  scripts\build_all.bat
 )
 
+REM tiles (not a build blocker: the map falls back to a solid colour)
+set "TILECNT=0"
+for /f %%c in ('dir /b /s "%MAPAPP_ROOT%\tiles\raster\*.jpg" 2^>nul ^| find /c /v ""') do set "TILECNT=%%c"
+if "%TILECNT%"=="0" (
+  echo  [INFO] tiles\raster is empty - fetch once with:  py -3.12 scripts\fetch_tiles.py
+) else (
+  echo  [OK]   tiles present: %TILECNT% jpg files
+)
+
 echo ------------------------------------------------------------
 if "%MISSING%"=="1" (
   echo  RESULT: required toolchain incomplete - see [MISS] items above.

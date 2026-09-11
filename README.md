@@ -41,11 +41,17 @@ mapApp/
 ```bat
 scripts\doctor.bat        :: 1) 环境体检：逐项 OK/MISS + 修复指引
 scripts\setup_env.bat     :: 2) 一次性：建 ai\.venv + 装 Python 依赖 + npm install
-scripts\build_all.bat     :: 3) 构建：前端 -> backend\static，C++ -> backend\bin\Release\mapapp.exe
-scripts\start_all.bat     :: 4) 启动：AI 桥 + 后端
+py -3.12 scripts\fetch_tiles.py   :: 3) 首次抓底图瓦片（约 1.3 万张，直连；可中断续跑）
+scripts\build_all.bat     :: 4) 构建：前端 -> backend\static，C++ -> backend\bin\Release\mapapp.exe
+scripts\start_all.bat     :: 5) 启动：AI 桥 + 后端
 ::    浏览器访问  http://127.0.0.1:8080/   或   http://<本机IP>:8080/
 scripts\stop_all.bat      ::    停止
 ```
+
+**首次构建耗时**：vcpkg 要从源码编译 Drogon 及其依赖（openssl、trantor、sqlite3 等），
+实测约 **12 分钟**；之后增量构建十几秒。vcpkg 还会下载 CMake / PowerShell / Perl 等大文件，
+国内直连 GitHub 易超时——用 `scripts\env.local.bat` 配代理，或预置到 `%USERPROFILE%\vcpkg\downloads\`，
+详见 [多端运行与环境配置](docs/05-开发/多端运行与环境配置.md) 第 5 节。
 
 全新机器若 `doctor.bat` 报 vcpkg 缺失：`scripts\install_vcpkg.bat`（一次性）。
 
