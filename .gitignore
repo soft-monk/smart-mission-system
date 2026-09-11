@@ -34,6 +34,9 @@ tiles/**/*.tiff
 tiles/**/*.pbf
 tiles/**/*.geojson
 
+# 独立模块自己的瓦片目录（解压 Release 瓦片包到这里即可离线运行；体积大，不入库）
+map-2d/tiles/
+
 # === 本地演示视频素材（不入库） ===
 media/*.mp4
 media/*.webm
