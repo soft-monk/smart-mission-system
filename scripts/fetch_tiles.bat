@@ -8,6 +8,7 @@ REM  Safe to interrupt: rerun the same command to resume where it stopped.
 REM  Stop it with: scripts\stop_tiles.bat
 REM ============================================================================
 setlocal EnableExtensions
+chcp 65001 >nul 2>&1
 call "%~dp0env.bat"
 
 if not defined MAPAPP_PYTHON (
