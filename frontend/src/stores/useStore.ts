@@ -2,6 +2,7 @@
 // 单一目标台账（TR-TGT-01）：所有界面从 targetStore 渲染，不各自维护副本。
 import { create } from 'zustand'
 import { api } from '@/api/client'
+import { MAP_OPTIONS, preloadWorldTiles } from '@map2d'
 import type {
   AiEvent, AlertEvent, Assessment, ChatResponse, ExecutionStatus, Group, HealthData, LinkCurves,
   LinkEdge, LinkMetrics, LinkQualityEvent, LinkTopology, MapConfigData, Mission, Phase, Plan,
@@ -29,6 +30,8 @@ interface State {
   bootModules: { key: string; name: string; percent: number }[]
   bootOverview: { key: string; name: string; text: string }[]
   bootFooter: string
+  /** 启动页"全球低精度底图预热"进度（驱动进度条） */
+  tileProgress: { done: number; total: number }
   selfCheckRunning: boolean
   selfCheckDone: boolean
   selfCheckItems: { key: string; name: string; sub: string; status: string }[]
@@ -154,6 +157,7 @@ export const useStore = create<State>((set, get) => ({
     { key: 'security', name: '系统安全', text: '安全' },
   ],
   bootFooter: '系统启动中，正在初始化核心模块…',
+  tileProgress: { done: 0, total: 0 },
   selfCheckRunning: false,
   selfCheckDone: false,
   selfCheckItems: [],
@@ -185,17 +189,89 @@ export const useStore = create<State>((set, get) => ({
 
   // ---------------------------------------------------------------- 启动
   async loadBoot() {
-    // 启动页动画：模拟模块加载进度（真实进度由 /health 校准）
-    const mods = [...get().bootModules]
-    for (let step = 1; step <= 20; step++) {
-      mods.forEach((m, i) => {
-        const target = [100, 100, 100, 100, 100][i]
-        m.percent = Math.min(target, Math.round((step / 20) * 100))
-      })
-      set({ bootProgress: Math.round((step / 20) * 100), bootModules: [...mods] })
-      await new Promise((r) => setTimeout(r, 60))
+    // 启动进度条＝真实任务进度，不再是固定时长的假循环：
+    //   0–5%    探测后端健康
+    //   5–95%   预热全球低精度底图（z0–4，341 张；逐张完成推进）
+    //   95–100% 装载场景与地图配置，随后交接给"系统状态自检"
+    //
+    // 注意：局域网里 341 张只需 ~0.5 s，若直接照实跳，进度条会"5% → 95%"一帧到位。
+    // 因此进度按 ≤1.6%/40ms 的速度**平滑逼近**真实完成量（不会超前于真实进度，
+    // 也就不会出现"条走完了还在等"）。预热很慢时，它自动退化为实时跟随。
+    const preloadMax = MAP_OPTIONS.preloadMaxZoom
+    let barTimer = 0
+    const stopBar = () => { if (barTimer) { window.clearInterval(barTimer); barTimer = 0 } }
+    const startBar = (getTarget: () => number) => {
+      stopBar()
+      barTimer = window.setInterval(() => {
+        const cur = get().bootProgress
+        const target = getTarget()
+        if (cur >= target) return
+        // 整数百分比，步长上限 1 → 5%→95% 最快约 2.2 s；实际进度慢时自动跟随
+        set({ bootProgress: Math.min(Math.round(target), cur + 1) })
+      }, 25)
     }
-    set({ bootFooter: '核心模块已就绪，正在进入系统状态确认…' })
+
+    // 1) 后端健康：同时把 5 个模块卡片的初始百分比对齐真实指标
+    set({ bootFooter: '正在连接服务端，检查核心模块…' })
+    try {
+      const h = await api.health()
+      set({
+        health: h,
+        bootOverview: h.systemOverview.map((o) => ({ key: o.key, name: o.name, text: o.text })),
+        bootModules: get().bootModules.map((m, i) => {
+          const found = h.modules.find((x) => x.key === m.key)
+          const fallback = Math.round((100 * (i + 1)) / get().bootModules.length)
+          return { ...m, percent: found ? found.metric : fallback }
+        }),
+      })
+    } catch (e) {
+      // 后端不可达也要能进（与自检界面的降级策略一致）：此时预热必然失败，跳过即可
+      set({ bootFooter: `服务端未就绪：${(e as Error).message}` })
+    }
+    set({ bootProgress: 5 })
+
+    // 2) 全球低精度"地板层"预热：把整层 z0–4 装进浏览器缓存，
+    //    这样缩小后任意拖拽都有内容垫底，不再出现未加载方块。
+    //    它只影响"有没有低清内容"，不影响高清瓦片的按需加载与图层显隐。
+    if (preloadMax > 0) {
+      try {
+        const cfg = await api.mapConfig()
+        const template = cfg?.basemap?.tileUrlTemplate ?? ''
+        if (template) {
+          set({ bootFooter: '正在预热全球低精度底图…' })
+          let target = 5
+          startBar(() => target)
+          const r = await preloadWorldTiles({
+            template,
+            maxZoom: preloadMax,
+            concurrency: MAP_OPTIONS.preloadConcurrency,
+            onProgress: (p) => {
+              set({ tileProgress: { done: p.done, total: p.total } })
+              target = 5 + 90 * p.ratio
+            },
+          })
+          stopBar()
+          // 把预热结果挂到 <html> 上：既方便现场排查，也让外部脚本/用户一眼看到实际耗时
+          document.documentElement.dataset.tilePreload =
+            `ok=${r.ok}/${r.total} failed=${r.failed} ms=${r.ms} aborted=${r.aborted}`
+          set({
+            tileProgress: { done: r.ok, total: r.total },
+            bootProgress: 95,
+            bootFooter: r.failed > 0
+              ? `底图预热完成（${r.ok}/${r.total}，${r.failed} 张未取到，${r.ms} ms），继续启动…`
+              : `底图预热完成（${r.ok} 张 / ${r.ms} ms），继续启动…`,
+          })
+        }
+      } catch {
+        // 预热失败不阻断启动：地图本身会按需加载，只是少了"地板层"兜底
+        stopBar()
+        set({ bootProgress: 95, bootFooter: '底图预热跳过，继续启动…' })
+      }
+    }
+
+    // 3) 交给自检界面（其内部会做 bootstrap 装载场景与地图配置）
+    stopBar()
+    set({ bootProgress: 100, bootFooter: '核心模块已就绪，正在进入系统状态确认…' })
     await get().runSelfCheck()
   },
 

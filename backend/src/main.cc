@@ -28,11 +28,13 @@ namespace {
 void registerStatic() {
     const auto& cfg = Config::instance();
 
-    auto serveDir = [](const std::string& urlPrefix, const std::string& fsDir) {
+    // 瓦片内容按 URL（z/x/y）永不变更，可长期缓存：第二次开图/拖动直接命中浏览器磁盘缓存。
+    // 只对 /tiles 生效——index.html 与前端产物绝不能加 immutable，否则更新后浏览器一直吃旧壳。
+    auto serveDir = [](const std::string& urlPrefix, const std::string& fsDir, const char* cacheControl) {
         app().registerHandlerViaRegex(
             "^" + urlPrefix + "/(.+)$",
-            [fsDir, urlPrefix](const HttpRequestPtr& req,
-                               std::function<void(const HttpResponsePtr&)>&& cb) {
+            [fsDir, urlPrefix, cacheControl](const HttpRequestPtr& req,
+                                             std::function<void(const HttpResponsePtr&)>&& cb) {
                 // 直接按前缀切串取剩余路径（比依赖正则捕获组更直观可靠）
                 const std::string path = req->getOriginalPath();
                 if (path.size() <= urlPrefix.size() + 1) {
@@ -47,7 +49,11 @@ void registerStatic() {
                 fs::path full = fs::path(fsDir) / rel;
                 std::error_code ec;
                 if (fs::exists(full, ec) && fs::is_regular_file(full, ec)) {
-                    cb(HttpResponse::newFileResponse(full.string()));
+                    auto resp = HttpResponse::newFileResponse(full.string());
+                    if (cacheControl && *cacheControl) {
+                        resp->addHeader("Cache-Control", cacheControl);
+                    }
+                    cb(resp);
                     return;
                 }
                 cb(HttpResponse::newNotFoundResponse());
@@ -55,9 +61,11 @@ void registerStatic() {
             {Get});
     };
 
-    serveDir("/tiles", cfg.tilesDir);
-    serveDir("/media", cfg.mediaDir);
-    serveDir("/reports", cfg.reportsDir);
+    // 瓦片：一年 immutable（URL 自带 z/x/y，等价于内容哈希）
+    serveDir("/tiles", cfg.tilesDir, "public, max-age=31536000, immutable");
+    // 媒体（本地演示 mp4）与报告：内容会替换，用可校验/短缓存策略
+    serveDir("/media", cfg.mediaDir, "public, max-age=3600");
+    serveDir("/reports", cfg.reportsDir, "no-cache");
 
     // SPA 回落：仅对「无文件扩展名的路径」回 index.html。
     // 必须排除带扩展名的资源请求（/assets/x.js、/assets/x.css 等），否则静态资源会被当成
