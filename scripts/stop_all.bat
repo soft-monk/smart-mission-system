@@ -15,6 +15,16 @@ REM ============================================================================
 setlocal EnableExtensions
 call "%~dp0env.bat"
 
+REM ---- optional argument -----------------------------------------------------
+REM   stop_all.bat          -> stop the two services only (default)
+REM   stop_all.bat tiles    -> stop the tile fetcher only
+REM   stop_all.bat all      -> stop services AND the tile fetcher
+if /i "%~1"=="tiles" (
+  call "%~dp0stop_tiles.bat"
+  exit /b 0
+)
+if /i "%~1"=="all" set "STOP_TILES=1"
+
 call :numeric "%MAPAPP_HTTP_PORT%" PORT_HTTP
 call :numeric "%MAPAPP_AI_PORT%"   PORT_AI
 if not defined PORT_HTTP ( echo [WARN] MAPAPP_HTTP_PORT invalid - using 8080 & set "PORT_HTTP=8080" )
@@ -25,6 +35,12 @@ call :kill_port %PORT_HTTP% mapapp.exe
 
 echo [2/2] stopping Python AI bridge on port %PORT_AI% ...
 call :kill_port %PORT_AI% python
+
+if defined STOP_TILES call "%~dp0stop_tiles.bat"
+
+REM The tile fetcher is a one-off data job (scripts\fetch_tiles.bat), not a
+REM service: it is deliberately NOT killed here unless you pass "all".
+powershell -NoProfile -Command "$n = @(Get-CimInstance Win32_Process | Where-Object { $_.Name -like 'python*' -and $_.CommandLine -like '*fetch_tiles.py*' }).Count; if ($n -gt 0) { Write-Host ''; Write-Host ('note: tile fetcher is still running - stop it with: scripts\stop_tiles.bat  (or: stop_all.bat all)') }"
 
 echo done.
 exit /b 0

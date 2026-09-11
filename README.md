@@ -44,7 +44,7 @@ mapApp/
 ```bat
 scripts\doctor.bat        :: 1) 环境体检：逐项 OK/MISS + 修复指引
 scripts\setup_env.bat     :: 2) 一次性：建 ai\.venv + 装 Python 依赖 + npm install
-py -3.12 scripts\fetch_tiles.py   :: 3) 首次抓底图瓦片（约 1.3 万张，直连；可中断续跑）
+scripts\fetch_tiles.bat   :: 3) 首次抓底图瓦片（约 1.3 万张，幂等可续跑；停止：scripts\stop_tiles.bat）
 scripts\build_all.bat     :: 4) 构建：前端 -> backend\static，C++ -> backend\bin\Release\mapapp.exe
 scripts\start_all.bat     :: 5) 启动：AI 桥 + 后端
 ::    浏览器访问  http://127.0.0.1:8080/   或   http://<本机IP>:8080/
