@@ -32,12 +32,13 @@ echo [1/2] starting Python AI bridge on 127.0.0.1:%MAPAPP_AI_PORT% ...
 echo       ^(first run creates ai\.venv and installs dependencies^)
 start "mapapp-ai" cmd /c ""%MAPAPP_ROOT%\ai\run_bridge.bat" --port %MAPAPP_AI_PORT%"
 
-timeout /t 3 /nobreak >nul
+REM sleep 3s: use ping, because "timeout" aborts when stdin is redirected
+ping -n 4 127.0.0.1 >nul
 
 echo [2/2] starting C++ backend on %MAPAPP_HTTP_PORT% ...
 start "mapapp-server" cmd /c ""%MAPAPP_ROOT%\backend\run_server.bat""
 
-timeout /t 3 /nobreak >nul
+ping -n 4 127.0.0.1 >nul
 
 echo.
 echo ============================================================
