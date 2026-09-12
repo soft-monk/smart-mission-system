@@ -8,7 +8,7 @@ import React, { useEffect } from 'react'
 import { useStore, PHASE_ORDER, type LeftNavKey } from '@/stores/useStore'
 import { ws } from '@/ws/client'
 import { Btn, Icon, LogoMark } from '@/components/ui'
-import { Compass, MapModeBadge, MapToolbar, MapView, displayModeOf, useMapUiStore } from '@map2d'
+import { Compass, MapModeBadge, MapToolbar, MapView, displayModeOf, mapCommands, useMapUiStore } from '@map2d'
 import { useMapData } from './useMapData'
 import { VoiceBall, VoiceInlinePanel } from '@/components/Voice'
 import { PhasePanel } from '@/features/PhasePanel'
@@ -51,6 +51,18 @@ export const AppShell: React.FC = () => {
   const setClearMode = useMapUiStore((s) => s.setClearMode)
 
   useEffect(() => { setDisplayMode(displayMode) }, [displayMode, setDisplayMode])
+
+  // 地图控件：模块默认全部不显示（需求 M2-CTRL-01），主系统按需开启自己用到的三类。
+  // 经纬度（coords）当前界面不需要，故不开启；将来要加只改这一行。
+  useEffect(() => {
+    let timer = 0
+    const tick = () => {
+      if (mapCommands.isReady()) mapCommands.showControls(['compass', 'zoom', 'scale'])
+      else timer = window.setTimeout(tick, 120)
+    }
+    tick()
+    return () => window.clearTimeout(timer)
+  }, [])
 
   // 清屏：Esc 退出（浏览器全屏时先让浏览器处理）
   useEffect(() => {
